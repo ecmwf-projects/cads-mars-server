@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+
+[project]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering"
+]
+dependencies = [
+]
+description = "A micro MARS server and client for distributed services"
+dynamic = ["version"]
+license = {file = "LICENSE"}
+name = "cads-mars-server"
+readme = "README.md"
+
+
+[tool.isort]
+profile = "black"
+
+[tool.pydocstyle]
+add_ignore = ["D1, D2, D4"]
+convention = "numpy"
+
+[tool.setuptools]
+packages = ["cads_mars_server"]
+
+[project.scripts]
+cads_mars_server = "cads_mars_server.cli:mars_cli"
+
+[tool.setuptools_scm]
+write_to = "cads_mars_server/version.py"
+write_to_template = '''
+# Do not change! Do not track in version control!
+__version__ = "{version}"
+'''
