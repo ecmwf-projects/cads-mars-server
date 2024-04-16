@@ -109,7 +109,7 @@ def this_server(mars_executable, host, port, timeout, logdir) -> None:
     """
     Set up a MARS server to execute requests.
     """
-
+    logger.info(f"Starting Server {host}:{port} {logdir}")
     _server = server.setup_server(mars_executable, host, port, timeout, logdir)
     _server.serve_forever()
 
