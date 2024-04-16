@@ -298,11 +298,6 @@ def setup_server(mars_executable, host, port, timeout=30, logdir="."):
         timeout = timeout
         mars_executable = mars_executable
         logdir = logdir
-        def __init__(self, *args, **kwargs):
-            super().__init__(
-                *args,
-                **kwargs
-            )
 
     server = ForkingHTTPServer((host, port), ThisHandler)
     return server
