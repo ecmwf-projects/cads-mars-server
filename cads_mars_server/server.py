@@ -129,7 +129,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         LOG.info("POST %s %s", request, environ)
 
         uid = str(uuid.uuid4())
-        fd, pid = mars(self.mars_executable, request, uid, logdir=self.log)
+        fd, pid = mars(self.mars_executable, request, uid, logdir=self.logdir)
 
         count = 0
 
