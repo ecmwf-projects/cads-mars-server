@@ -116,9 +116,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         timeout=30,
         logdir=".",
     ):
+        super().__init__()
         self.timeout = timeout
         self.mars_executable = mars_executable
         self.logdir = logdir
+        LOG.info(f'{mars_executable} , {logdir}')
 
     wbufsize = 1024 * 1024
     disable_nagle_algorithm = True
