@@ -294,10 +294,16 @@ class ForkingHTTPServer(socketserver.ForkingMixIn, http.server.HTTPServer):
 
 
 def setup_server(mars_executable, host, port, timeout=30, logdir="."):
+    _ = {
+        'mars_executable': mars_executable,
+        'timeout': timeout,
+        'logdir': logdir
+    }
+
     class ThisHandler(Handler):
-        timeout = timeout
-        mars_executable = mars_executable
-        logdir = logdir
+        timeout = _['timeout']
+        mars_executable = _['mars_executable']
+        logdir = _['logdir']
 
     server = ForkingHTTPServer((host, port), ThisHandler)
     return server
