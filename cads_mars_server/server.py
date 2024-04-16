@@ -110,19 +110,19 @@ def timeout_handler(signum, frame):
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    def __init__(
-        self,
-        *args,
-        mars_executable="/usr/local/bin/mars",
-        timeout=30,
-        logdir=".",
-        **kwargs
-    ):
-        self.timeout = timeout
-        self.mars_executable = mars_executable
-        self.logdir = logdir
-
-        super().__init__(*args, **kwargs)
+    # def __init__(
+    #     self,
+    #     *args,
+    #     mars_executable="/usr/local/bin/mars",
+    #     timeout=30,
+    #     logdir=".",
+    #     **kwargs
+    # ):
+    #     self.timeout = timeout
+    #     self.mars_executable = mars_executable
+    #     self.logdir = logdir
+    #
+    #     super().__init__(*args, **kwargs)
 
     wbufsize = 1024 * 1024
     disable_nagle_algorithm = True
@@ -307,11 +307,11 @@ class ForkingHTTPServer(socketserver.ForkingMixIn, http.server.HTTPServer):
 def setup_server(mars_executable, host, port, timeout=30, logdir="."):
     class ThisHandler(Handler):
         def __init__(self, *args, **kwargs):
+            self.timeout = timeout
+            self.mars_executable = mars_executable
+            self.logdir = logdir
             super().__init__(
                 *args,
-                mars_executable=mars_executable,
-                timeout=timeout,
-                logdir=logdir,
                 **kwargs
             )
 
