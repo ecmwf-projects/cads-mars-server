@@ -110,20 +110,9 @@ def timeout_handler(signum, frame):
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    # def __init__(
-    #     self,
-    #     *args,
-    #     mars_executable="/usr/local/bin/mars",
-    #     timeout=30,
-    #     logdir=".",
-    #     **kwargs
-    # ):
-    #     self.timeout = timeout
-    #     self.mars_executable = mars_executable
-    #     self.logdir = logdir
-    #
-    #     super().__init__(*args, **kwargs)
-
+    logdir = "."
+    timeout = 30
+    mars_executable = "/usr/local/bin/mars"
     wbufsize = 1024 * 1024
     disable_nagle_algorithm = True
 
@@ -140,7 +129,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         LOG.info("POST %s %s", request, environ)
 
         uid = str(uuid.uuid4())
-        fd, pid = mars(self.mars_executable, request, uid)
+        fd, pid = mars(self.mars_executable, request, uid, logdir=self.log)
 
         count = 0
 
