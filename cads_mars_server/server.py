@@ -112,11 +112,13 @@ def timeout_handler(signum, frame):
 class Handler(http.server.BaseHTTPRequestHandler):
     def __init__(
         self,
+        *args,
         mars_executable="/usr/local/bin/mars",
         timeout=30,
         logdir=".",
+        **kwargs
     ):
-        super().__init__()
+        super().__init__(*args, **kwargs)
         self.timeout = timeout
         self.mars_executable = mars_executable
         self.logdir = logdir
@@ -306,9 +308,11 @@ def setup_server(mars_executable, host, port, timeout=30, logdir="."):
     class ThisHandler(Handler):
         def __init__(self, *args, **kwargs):
             super().__init__(
+                *args,
                 mars_executable=mars_executable,
                 timeout=timeout,
                 logdir=logdir,
+                **kwargs
             )
 
     server = ForkingHTTPServer((host, port), ThisHandler)
