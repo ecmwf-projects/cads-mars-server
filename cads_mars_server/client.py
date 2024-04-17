@@ -83,6 +83,7 @@ class RemoteMarsClientSession:
         error = None
 
         try:
+            requests.head(self.url, timeout=self.timeout)
             r = requests.post(
                 self.url,
                 json=dict(
@@ -90,7 +91,6 @@ class RemoteMarsClientSession:
                     environ=self.environ,
                 ),
                 stream=True,
-                timeout=self.timeout,
             )
         except requests.exceptions.Timeout as e:
             LOG.error(f"Timeout {e}")

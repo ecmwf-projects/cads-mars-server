@@ -47,7 +47,7 @@ def tidy(data):
     return '"{0}"'.format(data)
 
 
-def mars(mars_executable, request, uid, logdir="."):
+def mars(/, mars_executable, request, uid, logdir):
 
     data_pipe_r, data_pipe_w = os.pipe()
     request_pipe_r, request_pipe_w = os.pipe()
@@ -129,7 +129,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         LOG.info("POST %s %s", request, environ)
 
         uid = str(uuid.uuid4())
-        fd, pid = mars(self.mars_executable, request, uid, logdir=self.logdir)
+        fd, pid = mars(mars_executable=self.mars_executable, request=request, uid=uid, logdir=self.logdir)
 
         count = 0
 
@@ -285,6 +285,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         # Used as a 'ping'
+        LOG.info('ping occuring')
         self.send_response(204)
         self.end_headers()
 
