@@ -47,7 +47,7 @@ def tidy(data):
     return '"{0}"'.format(data)
 
 
-def mars(/, mars_executable, request, uid, logdir):
+def mars(*, mars_executable, request, uid, logdir):
 
     data_pipe_r, data_pipe_w = os.pipe()
     request_pipe_r, request_pipe_w = os.pipe()
