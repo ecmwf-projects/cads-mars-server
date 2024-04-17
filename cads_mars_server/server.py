@@ -47,7 +47,7 @@ def tidy(data):
     return '"{0}"'.format(data)
 
 
-def mars(mars_executable, request, uid, logdir="."):
+def mars(/, mars_executable, request, uid, logdir):
 
     data_pipe_r, data_pipe_w = os.pipe()
     request_pipe_r, request_pipe_w = os.pipe()
@@ -138,7 +138,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         LOG.info("POST %s %s", request, environ)
 
         uid = str(uuid.uuid4())
-        fd, pid = mars(self.mars_executable, request, uid)
+        fd, pid = mars(mars_executable=self.mars_executable, request=request, uid=uid, logdir=self.logdir)
 
         count = 0
 
@@ -302,7 +302,7 @@ class ForkingHTTPServer(socketserver.ForkingMixIn, http.server.HTTPServer):
     pass
 
 
-def setup_server(mars_executable, host, port, timeout=30, logdir="."):
+def setup_server(/, mars_executable, host, port, timeout=30, logdir="."):
     class ThisHandler(Handler):
         def __init__(self, *args, **kwargs):
             super().__init__(
