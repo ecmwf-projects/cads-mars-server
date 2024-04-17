@@ -294,6 +294,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         # Used as a 'ping'
+        LOG.info('ping occuring')
         self.send_response(204)
         self.end_headers()
 
