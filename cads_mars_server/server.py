@@ -47,7 +47,7 @@ def tidy(data):
     return '"{0}"'.format(data)
 
 
-def mars(*, mars_executable, request, uid, logdir):
+def mars(*, mars_executable, request, uid, logdir, environ):
 
     data_pipe_r, data_pipe_w = os.pipe()
     request_pipe_r, request_pipe_w = os.pipe()
@@ -98,6 +98,10 @@ def mars(*, mars_executable, request, uid, logdir):
     os.dup2(out, 1)
     os.dup2(out, 2)
 
+    for k, v in environ.items():
+        if v is not None:
+            os.environ[f'MARS_ENVIRON_{k.upper()}'] = str(v)
+
     os.execlp(mars_executable, mars_executable)
 
 
@@ -128,8 +132,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         LOG.info("POST %s %s", request, environ)
 
-        uid = str(uuid.uuid4())
-        fd, pid = mars(mars_executable=self.mars_executable, request=request, uid=uid, logdir=self.logdir)
+        uid = environ.get('request_id')
+        if uid is None:
+            uid = str(uuid.uuid4())
+
+        fd, pid = mars(
+            mars_executable=self.mars_executable,
+            request=request,
+            uid=uid,
+            logdir=self.logdir,
+            environ=environ
+        )
 
         count = 0
 
