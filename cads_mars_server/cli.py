@@ -114,7 +114,7 @@ def this_client(request_file, target, uid, server_list) -> None:
 @click.option(
     "--daemonize",
     help="Detach the server from the terminal",
-    type=bool,
+    is_flag=True,
     default=False,
 )
 def this_server(
