@@ -306,7 +306,7 @@ class ForkingHTTPServer(socketserver.ForkingMixIn, http.server.HTTPServer):
     pass
 
 
-def setup_server(mars_executable, host, port, timeout=30, logdir=".", pidfile=None):
+def setup_server(mars_executable, host, port, timeout=30, logdir="."):
     _ = {
         "mars_executable": mars_executable,
         "timeout": timeout,
@@ -317,10 +317,6 @@ def setup_server(mars_executable, host, port, timeout=30, logdir=".", pidfile=No
         timeout = _["timeout"]
         mars_executable = _["mars_executable"]
         logdir = _["logdir"]
-
-    if pidfile:
-        with open(pidfile, "w") as f:
-            f.write(str(os.getpid()))
 
     server = ForkingHTTPServer((host, port), ThisHandler)
     return server

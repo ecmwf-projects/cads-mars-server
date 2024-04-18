@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 
 import click
 
@@ -110,13 +111,41 @@ def this_client(request_file, target, uid, server_list) -> None:
     help="PID file",
     default=None,
 )
-def this_server(mars_executable, host, port, timeout, logdir, pidfile) -> None:
+@click.option(
+    "--daemon",
+    help="Detach the server from the terminal",
+    action_click="store_true",
+)
+def this_server(mars_executable, host, port, timeout, logdir, pidfile, daemon) -> None:
     """
     Set up a MARS server to execute requests.
     """
     logger.info(f"Starting Server {host}:{port} {logdir}")
 
-    _server = server.setup_server(mars_executable, host, port, timeout, logdir, pidfile)
-    _server.serve_forever()
+    _server = server.setup_server(mars_executable, host, port, timeout, logdir)
 
-    logger.info("Server started")
+    if daemon:
+        # TODO:use that with modern python
+        # import daemon
+
+        # with daemon.DaemonContext():
+        #     _server.serve_forever()
+
+        # For now, we will use the following
+        pid = os.fork()
+        if pid > 0:
+            # exit first parent
+            sys.exit(0)
+
+        os.setsid()
+
+        pid = os.fork()
+        if pid > 0:
+            # exit from second parent
+            sys.exit(0)
+
+    if pidfile:
+        with open(pidfile, "w") as f:
+            f.write(str(os.getpid()))
+
+    _server.serve_forever()
