@@ -16,7 +16,6 @@ LOG = logging.getLogger(__name__)
 class Result:
     def __init__(
         self,
-        /,
         error=None,
         message=None,
         retry_same_host=False,
@@ -108,7 +107,6 @@ class RemoteMarsClientSession:
         uid = None
         code = r.status_code
         if code not in (http.HTTPStatus.BAD_REQUEST, http.HTTPStatus.OK):
-
             retry_same_host = code in (
                 http.HTTPStatus.BAD_GATEWAY,
                 http.HTTPStatus.GATEWAY_TIMEOUT,

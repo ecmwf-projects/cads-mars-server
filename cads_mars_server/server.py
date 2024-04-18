@@ -25,7 +25,6 @@ def validate_uuid(uid):
 
 
 def tidy(data):
-
     if "/" in data and not data.startswith("/"):
         return tidy(data.split("/"))
 
@@ -48,7 +47,6 @@ def tidy(data):
 
 
 def mars(*, mars_executable, request, uid, logdir, environ):
-
     data_pipe_r, data_pipe_w = os.pipe()
     request_pipe_r, request_pipe_w = os.pipe()
 
@@ -60,7 +58,6 @@ def mars(*, mars_executable, request, uid, logdir, environ):
     pid = os.fork()
 
     if pid:
-
         if isinstance(request, dict):
             requests = [request]
         else:
@@ -100,7 +97,7 @@ def mars(*, mars_executable, request, uid, logdir, environ):
 
     for k, v in environ.items():
         if v is not None:
-            os.environ[f'MARS_ENVIRON_{k.upper()}'] = str(v)
+            os.environ[f"MARS_ENVIRON_{k.upper()}"] = str(v)
 
     os.execlp(mars_executable, mars_executable)
 
@@ -121,7 +118,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
     disable_nagle_algorithm = True
 
     def do_POST(self):
-
         signal.signal(signal.SIGALRM, timeout_handler)
 
         length = int(self.headers["content-length"])
@@ -132,7 +128,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         LOG.info("POST %s %s", request, environ)
 
-        uid = environ.get('request_id')
+        uid = environ.get("request_id")
         if uid is None:
             uid = str(uuid.uuid4())
 
@@ -141,7 +137,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             request=request,
             uid=uid,
             logdir=self.logdir,
-            environ=environ
+            environ=environ,
         )
 
         count = 0
@@ -154,7 +150,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             retry_next_host=None,
         ):
             LOG.info(
-                f"Sending header {code=} {exited=} {killed=} {retry_same_host=} {retry_next_host=}"
+                f"Sending header code={code} exited={exited} killed={killed}"
+                f" retry_same_host={retry_same_host} retry_next_host={retry_next_host}"
             )
             signal.alarm(self.timeout)
             self.send_response(code)
@@ -180,7 +177,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         start = time.time()
         data = None
         try:
-
             os.set_blocking(fd, True)
 
             while True:
@@ -212,7 +208,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _, code = os.waitpid(pid, 0)
 
             if count == 0 and code != 0:
-
                 kwargs = {}
 
                 if os.WIFSIGNALED(code):
@@ -298,7 +293,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         # Used as a 'ping'
-        LOG.info('ping occuring')
+        LOG.info("ping occuring")
         self.send_response(204)
         self.end_headers()
 
@@ -308,16 +303,12 @@ class ForkingHTTPServer(socketserver.ForkingMixIn, http.server.HTTPServer):
 
 
 def setup_server(mars_executable, host, port, timeout=30, logdir="."):
-    _ = {
-        'mars_executable': mars_executable,
-        'timeout': timeout,
-        'logdir': logdir
-    }
+    _ = {"mars_executable": mars_executable, "timeout": timeout, "logdir": logdir}
 
     class ThisHandler(Handler):
-        timeout = _['timeout']
-        mars_executable = _['mars_executable']
-        logdir = _['logdir']
+        timeout = _["timeout"]
+        mars_executable = _["mars_executable"]
+        logdir = _["logdir"]
 
     server = ForkingHTTPServer((host, port), ThisHandler)
     return server

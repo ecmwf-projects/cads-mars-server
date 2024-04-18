@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
     "--server-list",
     "-s",
     help=("File which contains the list of URLs of the servers."),
-    default="./server.list"
+    default="./server.list",
 )
 def this_client(request_file, target, uid, server_list) -> None:
     """
