@@ -149,7 +149,7 @@ class RemoteMarsClientSession:
                 return Result(error=e, retry_same_host=True, retry_next_host=True)
             except Exception as e:
                 LOG.exception("Error transferring file (2)")
-                return Result(error=e)
+                error = e
 
         logfile = None
 
