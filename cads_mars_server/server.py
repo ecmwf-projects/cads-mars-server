@@ -95,11 +95,15 @@ def mars(*, mars_executable, request, uid, logdir, environ):
     os.dup2(out, 1)
     os.dup2(out, 2)
 
+    env = dict(os.environ)
+
     for k, v in environ.items():
         if v is not None:
-            os.environ[f"MARS_ENVIRON_{k.upper()}"] = str(v)
+            env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
 
-    os.execlp(mars_executable, mars_executable)
+    env.setdefault("MARS_ENVIRON_REQUEST_ID", uid)
+
+    os.execlpe(mars_executable, mars_executable, env)
 
 
 # https://stackoverflow.com/questions/48613006/python-sendall-not-raising-connection-closed-error
