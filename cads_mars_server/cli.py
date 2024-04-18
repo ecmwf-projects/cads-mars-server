@@ -105,13 +105,18 @@ def this_client(request_file, target, uid, server_list) -> None:
     help="Path to the log directory",
     default=".",
 )
-def this_server(mars_executable, host, port, timeout, logdir) -> None:
+@click.option(
+    "--pidfile",
+    help="PID file",
+    default=None,
+)
+def this_server(mars_executable, host, port, timeout, logdir, pidfile) -> None:
     """
     Set up a MARS server to execute requests.
     """
     logger.info(f"Starting Server {host}:{port} {logdir}")
 
-    _server = server.setup_server(mars_executable, host, port, timeout, logdir)
+    _server = server.setup_server(mars_executable, host, port, timeout, logdir, pidfile)
     _server.serve_forever()
 
     logger.info("Server started")
