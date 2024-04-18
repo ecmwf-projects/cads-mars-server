@@ -112,11 +112,13 @@ def this_client(request_file, target, uid, server_list) -> None:
     default=None,
 )
 @click.option(
-    "--daemon",
+    "--daemonize",
     help="Detach the server from the terminal",
     action_click="store_true",
 )
-def this_server(mars_executable, host, port, timeout, logdir, pidfile, daemon) -> None:
+def this_server(
+    mars_executable, host, port, timeout, logdir, pidfile, daemonize
+) -> None:
     """
     Set up a MARS server to execute requests.
     """
@@ -124,7 +126,7 @@ def this_server(mars_executable, host, port, timeout, logdir, pidfile, daemon) -
 
     _server = server.setup_server(mars_executable, host, port, timeout, logdir)
 
-    if daemon:
+    if daemonize:
         # TODO:use that with modern python
         # import daemon
 
