@@ -114,7 +114,7 @@ def this_client(request_file, target, uid, server_list) -> None:
 @click.option(
     "--daemonize",
     help="Detach the server from the terminal",
-    action_click="store_true",
+    action="store_true",
 )
 def this_server(
     mars_executable, host, port, timeout, logdir, pidfile, daemonize
