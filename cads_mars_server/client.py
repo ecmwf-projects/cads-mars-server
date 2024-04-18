@@ -16,7 +16,6 @@ LOG = logging.getLogger(__name__)
 class Result:
     def __init__(
         self,
-        /,
         error=None,
         message=None,
         retry_same_host=False,

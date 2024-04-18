@@ -98,11 +98,15 @@ def mars(*, mars_executable, request, uid, logdir, environ):
     os.dup2(out, 1)
     os.dup2(out, 2)
 
+    env = dict(os.environ)
+
     for k, v in environ.items():
         if v is not None:
-            os.environ[f'MARS_ENVIRON_{k.upper()}'] = str(v)
+            env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
 
-    os.execlp(mars_executable, mars_executable)
+    env.setdefault("MARS_ENVIRON_REQUEST_ID", uid)
+
+    os.execlpe(mars_executable, mars_executable, env)
 
 
 # https://stackoverflow.com/questions/48613006/python-sendall-not-raising-connection-closed-error
@@ -132,7 +136,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         LOG.info("POST %s %s", request, environ)
 
-        uid = environ.get('request_id')
+        uid = environ.get("request_id")
         if uid is None:
             uid = str(uuid.uuid4())
 
@@ -141,7 +145,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             request=request,
             uid=uid,
             logdir=self.logdir,
-            environ=environ
+            environ=environ,
         )
 
         count = 0
@@ -154,7 +158,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             retry_next_host=None,
         ):
             LOG.info(
-                f"Sending header {code=} {exited=} {killed=} {retry_same_host=} {retry_next_host=}"
+                f"Sending header code={code} exited={exited} killed={killed}"
+                f" retry_same_host={retry_same_host} retry_next_host={retry_next_host}"
             )
             signal.alarm(self.timeout)
             self.send_response(code)
@@ -298,7 +303,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         # Used as a 'ping'
-        LOG.info('ping occuring')
+        LOG.info("ping occuring")
         self.send_response(204)
         self.end_headers()
 
@@ -308,16 +313,12 @@ class ForkingHTTPServer(socketserver.ForkingMixIn, http.server.HTTPServer):
 
 
 def setup_server(mars_executable, host, port, timeout=30, logdir="."):
-    _ = {
-        'mars_executable': mars_executable,
-        'timeout': timeout,
-        'logdir': logdir
-    }
+    _ = {"mars_executable": mars_executable, "timeout": timeout, "logdir": logdir}
 
     class ThisHandler(Handler):
-        timeout = _['timeout']
-        mars_executable = _['mars_executable']
-        logdir = _['logdir']
+        timeout = _["timeout"]
+        mars_executable = _["mars_executable"]
+        logdir = _["logdir"]
 
     server = ForkingHTTPServer((host, port), ThisHandler)
     return server
