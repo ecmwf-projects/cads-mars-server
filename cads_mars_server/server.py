@@ -25,8 +25,9 @@ def validate_uuid(uid):
 
 
 def tidy(data):
-    if "/" in data and not data.startswith("/"):
-        return tidy(data.split("/"))
+    if isinstance(data, str):
+        if "/" in data and not data.startswith("/"):
+            return tidy(data.split("/"))
 
     if isinstance(data, list):
         return "/".join([tidy(v) for v in data])
