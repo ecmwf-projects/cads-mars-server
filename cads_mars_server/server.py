@@ -39,6 +39,10 @@ def tidy(data):
     # time=00:00:00
     if re.match(r"^\d\d:\d\d:\d\d$", data):
         return data
+    
+    # time=00:00
+    if re.match(r"^\d\d:\d\d$", data):
+        return data
 
     if '"' in data:
         assert "'" not in data
