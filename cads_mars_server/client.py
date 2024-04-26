@@ -2,7 +2,7 @@ import http
 import json
 import logging
 import random
-import sys
+import Path
 import time
 
 import requests
@@ -225,5 +225,5 @@ class RemoteMarsClientCluster:
 
             LOG.error(f"Error {reply}")
             LOG.error(f"Retry on the next host {url}")
-
+        Path(target).touch()
         return reply
