@@ -25,6 +25,7 @@ def validate_uuid(uid):
 
 
 # From the MARS code
+
 IDENT = r"[_0-9A-Za-z]+[_\.\-\+A-Za-z0-9:\t ]*[_\.\-\+A-Za-z0-9]*"
 NUMB = r"[\-\.]*[0-9]+[\.0-9]*[Ee]*[\-\+]*[0-9]*"
 
