@@ -14,6 +14,10 @@ classifiers = [
   "Topic :: Scientific/Engineering"
 ]
 dependencies = [
+  'click',
+  'requests',
+  'http',
+  'urllib3'
 ]
 description = "A micro MARS server and client for distributed services"
 dynamic = ["version"]
