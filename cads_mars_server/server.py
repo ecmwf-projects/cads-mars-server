@@ -32,6 +32,7 @@ NUMB = r"[\-\.]*[0-9]+[\.0-9]*[Ee]*[\-\+]*[0-9]*"
 
 def tidy(data):
     if isinstance(data, str):
+        data = data.strip()
 
         if data.startswith("'"):
             assert data.endswith("'")
