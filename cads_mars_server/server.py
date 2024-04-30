@@ -24,8 +24,23 @@ def validate_uuid(uid):
     return re.match(r"^[a-f0-9-]{36}$", uid)
 
 
+# From the MARS code
+
+IDENT = r"[_0-9A-Za-z]+[_\.\-\+A-Za-z0-9:\t ]*[_\.\-\+A-Za-z0-9]*"
+NUMB = r"[\-\.]*[0-9]+[\.0-9]*[Ee]*[\-\+]*[0-9]*"
+
+
 def tidy(data):
     if isinstance(data, str):
+
+        if data.startswith("'"):
+            assert data.endswith("'")
+            return data
+
+        if data.startswith('"'):
+            assert data.endswith('"')
+            return data
+
         if "/" in data and not data.startswith("/"):
             return tidy(data.split("/"))
 
@@ -33,11 +48,10 @@ def tidy(data):
         return "/".join([tidy(v) for v in data])
 
     data = str(data)
-    if re.match(r"^[\w\s\.\-]*$", data):
+    if re.match(IDENT, data):
         return data
 
-    # time=00:00:00
-    if re.match(r"^\d\d:\d\d:\d\d$", data):
+    if re.match(NUMB, data):
         return data
 
     if '"' in data:
