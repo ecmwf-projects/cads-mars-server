@@ -179,11 +179,12 @@ class RemoteMarsClientSession:
 
 
 class RemoteMarsClient:
-    def __init__(self, url, retries=3, delay=10, timeout=60):
+    def __init__(self, url, retries=3, delay=10, timeout=60, log=LOG):
         self.url = url
         self.retries = retries
         self.delay = delay
         self.timeout = timeout
+        self.log = log
 
     def execute(self, request, environ, target):
         session = RemoteMarsClientSession(
