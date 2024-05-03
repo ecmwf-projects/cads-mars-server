@@ -102,7 +102,10 @@ class RemoteMarsClientSession:
         try:
             r.raise_for_status()
         except requests.exceptions.HTTPError as e:
-            self.log.error(f"HTTP error {e}")
+            self.log.error(f"HTTP error: {e}")
+            error = e
+        except Exception as e:
+            self.log.error(f"UNEXPECTED EXCEPTION: {e}")
             error = e
 
         uid = None
