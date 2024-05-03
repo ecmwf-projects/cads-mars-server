@@ -188,7 +188,7 @@ class RemoteMarsClient:
 
     def execute(self, request, environ, target):
         session = RemoteMarsClientSession(
-            self.url, request, environ, target, self.timeout
+            self.url, request, environ, target, self.timeout, log=self.log
         )
 
         for i in range(self.retries):
