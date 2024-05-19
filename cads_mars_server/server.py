@@ -9,6 +9,8 @@ import socketserver
 import time
 import uuid
 
+import setproctitle
+
 from .tools import bytes
 
 logging.basicConfig(
@@ -151,6 +153,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         uid = environ.get("request_id")
         if uid is None:
             uid = str(uuid.uuid4())
+
+        setproctitle.setproctitle(f"mars {uid}")
 
         fd, pid = mars(
             mars_executable=self.mars_executable,
