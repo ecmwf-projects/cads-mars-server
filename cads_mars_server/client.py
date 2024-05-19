@@ -1,16 +1,30 @@
 import http
-import json
 import logging
 import random
-import sys
+import socket
 import time
 
 import requests
 import urllib3
+from urllib3.connectionpool import HTTPConnectionPool
 
 from .tools import bytes
 
 LOG = logging.getLogger(__name__)
+
+
+class ConnectionWithKeepAlive(HTTPConnectionPool.ConnectionCls):
+    def _new_conn(self):
+        conn = super()._new_conn()
+        conn.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        if hasattr(socket, "TCP_KEEPIDLE"):
+            conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60 * 10)
+        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+        return conn
+
+
+HTTPConnectionPool.ConnectionCls = ConnectionWithKeepAlive
 
 
 class Result:
