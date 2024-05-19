@@ -15,6 +15,7 @@ classifiers = [
 ]
 dependencies = [
 "click",
+"requests",
 "setproctitle"
 ]
 description = "A micro MARS server and client for distributed services"
