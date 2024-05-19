@@ -154,7 +154,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if uid is None:
             uid = str(uuid.uuid4())
 
-        setproctitle.setproctitle(f"mars {uid}")
+        setproctitle.setproctitle(f"cads_mars_server {uid}")
 
         fd, pid = mars(
             mars_executable=self.mars_executable,
