@@ -324,7 +324,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(204)
         self.end_headers()
 
-    def handle(self) -> None:
+    def handle(self):
         """
         Close the accept socket so the main server can restart
         without a "Address already in use" error.
