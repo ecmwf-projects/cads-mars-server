@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 
 import click
 
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
     "--server-list",
     "-s",
     help=("File which contains the list of URLs of the servers."),
-    default="./server.list"
+    default="./server.list",
 )
 def this_client(request_file, target, uid, server_list) -> None:
     """
@@ -105,13 +106,49 @@ def this_client(request_file, target, uid, server_list) -> None:
     help="Path to the log directory",
     default=".",
 )
-def this_server(mars_executable, host, port, timeout, logdir) -> None:
+@click.option(
+    "--pidfile",
+    help="PID file",
+    default=None,
+)
+@click.option(
+    "--daemonize",
+    help="Detach the server from the terminal",
+    is_flag=True,
+    default=False,
+)
+def this_server(
+    mars_executable, host, port, timeout, logdir, pidfile, daemonize
+) -> None:
     """
     Set up a MARS server to execute requests.
     """
     logger.info(f"Starting Server {host}:{port} {logdir}")
 
     _server = server.setup_server(mars_executable, host, port, timeout, logdir)
-    _server.serve_forever()
 
-    logger.info("Server started")
+    if daemonize:
+        # TODO:use that with modern python
+        # import daemon
+
+        # with daemon.DaemonContext():
+        #     _server.serve_forever()
+
+        # For now, we will use the following
+        pid = os.fork()
+        if pid > 0:
+            # exit first parent
+            sys.exit(0)
+
+        os.setsid()
+
+        pid = os.fork()
+        if pid > 0:
+            # exit from second parent
+            sys.exit(0)
+
+    if pidfile:
+        with open(pidfile, "w") as f:
+            f.write(str(os.getpid()))
+
+    _server.serve_forever()

@@ -1,22 +1,36 @@
 import http
-import json
 import logging
 import random
-import sys
+import socket
 import time
 
 import requests
+import setproctitle
 import urllib3
+from urllib3.connectionpool import HTTPConnectionPool
 
 from .tools import bytes
 
 LOG = logging.getLogger(__name__)
 
 
+class ConnectionWithKeepAlive(HTTPConnectionPool.ConnectionCls):
+    def _new_conn(self):
+        conn = super()._new_conn()
+        conn.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        if hasattr(socket, "TCP_KEEPIDLE"):
+            conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60 * 10)
+        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+        return conn
+
+
+HTTPConnectionPool.ConnectionCls = ConnectionWithKeepAlive
+
+
 class Result:
     def __init__(
         self,
-        /,
         error=None,
         message=None,
         retry_same_host=False,
@@ -36,7 +50,7 @@ class Result:
 
 
 class RemoteMarsClientSession:
-    def __init__(self, url, request, environ, target, timeout=60):
+    def __init__(self, url, request, environ, target, timeout=60, log=LOG):
         self.url = url
         self.request = request
         self.environ = environ
@@ -44,6 +58,7 @@ class RemoteMarsClientSession:
         self.uid = None
         self.endr_recieved = False
         self.timeout = timeout
+        self.log = log
 
     def _transfer(self, r):
         start = time.time()
@@ -75,10 +90,12 @@ class RemoteMarsClientSession:
                 raise ValueError("ENDR not received")
 
         elapsed = time.time() - start
-        LOG.info(f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}")
+        self.log.info(
+            f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
+        )
 
     def execute(self):
-        LOG.info(f"Calling {self.url} {self.request} {self.environ}")
+        self.log.info(f"Calling {self.url} {self.request} {self.environ}")
 
         error = None
 
@@ -93,22 +110,21 @@ class RemoteMarsClientSession:
                 stream=True,
             )
         except requests.exceptions.Timeout as e:
-            LOG.error(f"Timeout {e}")
+            self.log.error(f"Timeout {e}")
             return Result(error=e, retry_next_host=True)
         except requests.exceptions.ConnectionError as e:
-            LOG.error(f"Connection error {e}")
+            self.log.error(f"Connection error {e}")
             return Result(error=e, retry_next_host=True)
 
         try:
             r.raise_for_status()
         except requests.exceptions.HTTPError as e:
-            LOG.error(f"HTTP error {e}")
+            self.log.error(f"HTTP error {e}")
             error = e
 
         uid = None
         code = r.status_code
         if code not in (http.HTTPStatus.BAD_REQUEST, http.HTTPStatus.OK):
-
             retry_same_host = code in (
                 http.HTTPStatus.BAD_GATEWAY,
                 http.HTTPStatus.GATEWAY_TIMEOUT,
@@ -121,7 +137,7 @@ class RemoteMarsClientSession:
 
             if "X-MARS-SIGNAL" in r.headers:
                 signal = int(r.headers["X-MARS-SIGNAL"])
-                LOG.error(f"MARS client kill by signal {signal}")
+                self.log.error(f"MARS client kill by signal {signal}")
 
             if "X-MARS-RETRY-SAME-HOST" in r.headers:
                 retry_same_host = int(r.headers["X-MARS-RETRY-SAME-HOST"])
@@ -141,17 +157,17 @@ class RemoteMarsClientSession:
         if code == http.HTTPStatus.BAD_REQUEST:
             if "X-MARS-EXIT-CODE" in r.headers:
                 exitcode = int(r.headers["X-MARS-EXIT-CODE"])
-                LOG.error(f"MARS client exited with code {exitcode}")
+                self.log.error(f"MARS client exited with code {exitcode}")
 
         if code == http.HTTPStatus.OK:
             try:
                 self._transfer(r)
             except urllib3.exceptions.ProtocolError as e:
-                LOG.exception("Error transferring file (1)")
+                self.log.exception("Error transferring file (1)")
                 return Result(error=e, retry_same_host=True, retry_next_host=True)
             except Exception as e:
-                LOG.exception("Error transferring file (2)")
-                return Result(error=e)
+                self.log.exception("Error transferring file (2)")
+                error = e
 
         logfile = None
 
@@ -160,14 +176,14 @@ class RemoteMarsClientSession:
             r.raise_for_status()
             logfile = r.text
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
-            LOG.exception("Error getting log file")
+            self.log.exception("Error getting log file")
 
         try:
             r = requests.delete(self.url + "/" + uid)
             r.raise_for_status()
             self.uid = None
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
-            LOG.exception("Error deleting log file")
+            self.log.exception("Error deleting log file")
 
         return Result(error=error, message=logfile or str(error))
 
@@ -180,15 +196,21 @@ class RemoteMarsClientSession:
 
 
 class RemoteMarsClient:
-    def __init__(self, url, retries=3, delay=10, timeout=60):
+    def __init__(self, url, retries=3, delay=10, timeout=60, log=LOG):
         self.url = url
         self.retries = retries
         self.delay = delay
         self.timeout = timeout
+        self.log = log
 
     def execute(self, request, environ, target):
         session = RemoteMarsClientSession(
-            self.url, request, environ, target, self.timeout
+            self.url,
+            request,
+            environ,
+            target,
+            self.timeout,
+            log=self.log,
         )
 
         for i in range(self.retries):
@@ -199,8 +221,8 @@ class RemoteMarsClient:
             if not reply.retry_same_host:
                 return reply
 
-            LOG.error(f"Error {reply}")
-            LOG.error(f"Retry on the same host {self.url}")
+            self.log.error(f"Error {reply}")
+            self.log.error(f"Retry on the same host {self.url}")
 
             time.sleep(self.delay)
 
@@ -208,24 +230,41 @@ class RemoteMarsClient:
 
 
 class RemoteMarsClientCluster:
-    def __init__(self, urls, retries=3, delay=10, timeout=60):
+    def __init__(self, urls, retries=3, delay=10, timeout=60, log=LOG):
         self.urls = urls
         self.retries = retries
         self.delay = delay
         self.timeout = timeout
+        self.log = log
 
     def execute(self, request, environ, target):
         random.shuffle(self.urls)
-        for url in self.urls:
-            client = RemoteMarsClient(url, self.retries, self.delay, self.timeout)
-            reply = client.execute(request, environ, target)
-            if not reply.error:
-                return reply
+        saved = setproctitle.getproctitle()
+        request_id = request.get("request_id", "unknown")
+        try:
 
-            if not reply.retry_next_host:
-                return reply
+            for url in self.urls:
 
-            LOG.error(f"Error {reply}")
-            LOG.error(f"Retry on the next host {url}")
+                setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
+
+                client = RemoteMarsClient(
+                    url,
+                    self.retries,
+                    self.delay,
+                    self.timeout,
+                    log=self.log,
+                )
+
+                reply = client.execute(request, environ, target)
+                if not reply.error:
+                    return reply
+
+                if not reply.retry_next_host:
+                    return reply
+
+                self.log.error(f"Error {reply}")
+                self.log.error(f"Retry on the next host {url}")
+        finally:
+            setproctitle.setproctitle(saved)
 
         return reply

@@ -9,6 +9,8 @@ import socketserver
 import time
 import uuid
 
+import setproctitle
+
 from .tools import bytes
 
 logging.basicConfig(
@@ -24,20 +26,35 @@ def validate_uuid(uid):
     return re.match(r"^[a-f0-9-]{36}$", uid)
 
 
-def tidy(data):
+# From the MARS code
 
-    if "/" in data and not data.startswith("/"):
-        return tidy(data.split("/"))
+IDENT = r"[_0-9A-Za-z]+[_\.\-\+A-Za-z0-9:\t ]*[_\.\-\+A-Za-z0-9]*"
+NUMB = r"[\-\.]*[0-9]+[\.0-9]*[Ee]*[\-\+]*[0-9]*"
+
+
+def tidy(data):
+    if isinstance(data, str):
+        data = data.strip()
+
+        if data.startswith("'"):
+            assert data.endswith("'")
+            return data
+
+        if data.startswith('"'):
+            assert data.endswith('"')
+            return data
+
+        if "/" in data and not data.startswith("/"):
+            return tidy(data.split("/"))
 
     if isinstance(data, list):
         return "/".join([tidy(v) for v in data])
 
     data = str(data)
-    if re.match(r"^[\w\s\.\-]*$", data):
+    if re.match(IDENT, data):
         return data
 
-    # time=00:00:00
-    if re.match(r"^\d\d:\d\d:\d\d$", data):
+    if re.match(NUMB, data):
         return data
 
     if '"' in data:
@@ -47,8 +64,7 @@ def tidy(data):
     return '"{0}"'.format(data)
 
 
-def mars(/, mars_executable, request, uid, logdir):
-
+def mars(*, mars_executable, request, uid, logdir, environ):
     data_pipe_r, data_pipe_w = os.pipe()
     request_pipe_r, request_pipe_w = os.pipe()
 
@@ -60,7 +76,6 @@ def mars(/, mars_executable, request, uid, logdir):
     pid = os.fork()
 
     if pid:
-
         if isinstance(request, dict):
             requests = [request]
         else:
@@ -98,7 +113,15 @@ def mars(/, mars_executable, request, uid, logdir):
     os.dup2(out, 1)
     os.dup2(out, 2)
 
-    os.execlp(mars_executable, mars_executable)
+    env = dict(os.environ)
+
+    for k, v in environ.items():
+        if v is not None:
+            env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
+
+    env.setdefault("MARS_ENVIRON_REQUEST_ID", uid)
+
+    os.execlpe(mars_executable, mars_executable, env)
 
 
 # https://stackoverflow.com/questions/48613006/python-sendall-not-raising-connection-closed-error
@@ -110,23 +133,13 @@ def timeout_handler(signum, frame):
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    def __init__(
-        self,
-        mars_executable="/usr/local/bin/mars",
-        timeout=30,
-        logdir=".",
-    ):
-        super().__init__()
-        self.timeout = timeout
-        self.mars_executable = mars_executable
-        self.logdir = logdir
-        LOG.info(f'{mars_executable} , {logdir}')
-
+    logdir = "."
+    timeout = 30
+    mars_executable = "/usr/local/bin/mars"
     wbufsize = 1024 * 1024
     disable_nagle_algorithm = True
 
     def do_POST(self):
-
         signal.signal(signal.SIGALRM, timeout_handler)
 
         length = int(self.headers["content-length"])
@@ -137,8 +150,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         LOG.info("POST %s %s", request, environ)
 
-        uid = str(uuid.uuid4())
-        fd, pid = mars(mars_executable=self.mars_executable, request=request, uid=uid, logdir=self.logdir)
+        uid = environ.get("request_id")
+        if uid is None:
+            uid = str(uuid.uuid4())
+
+        setproctitle.setproctitle(f"cads_mars_server {uid}")
+
+        fd, pid = mars(
+            mars_executable=self.mars_executable,
+            request=request,
+            uid=uid,
+            logdir=self.logdir,
+            environ=environ,
+        )
 
         count = 0
 
@@ -150,7 +174,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             retry_next_host=None,
         ):
             LOG.info(
-                f"Sending header {code=} {exited=} {killed=} {retry_same_host=} {retry_next_host=}"
+                f"Sending header code={code} exited={exited} killed={killed}"
+                f" retry_same_host={retry_same_host} retry_next_host={retry_next_host}"
             )
             signal.alarm(self.timeout)
             self.send_response(code)
@@ -176,7 +201,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         start = time.time()
         data = None
         try:
-
             os.set_blocking(fd, True)
 
             while True:
@@ -208,7 +232,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _, code = os.waitpid(pid, 0)
 
             if count == 0 and code != 0:
-
                 kwargs = {}
 
                 if os.WIFSIGNALED(code):
@@ -228,13 +251,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
                 kwargs[message] = code
                 if message == "killed":
-                    # Don't retry if killed KILL or TERM, so we can cancel the job
+                    # Don't retry if killed KILL so we can cancel the job
                     kwargs["retry_next_host"] = code in (
                         signal.SIGHUP,
-                        signal.SIGINT,
+                        signal.SIGTERM,
                         signal.SIGQUIT,
                     )
-                    kwargs["retry_same_host"] = code in (signal.SIGQUIT,)
+                    kwargs["retry_same_host"] = False
 
                 send_header(status, **kwargs)
                 self.wfile.write(json.dumps(kwargs).encode())
@@ -294,7 +317,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         # Used as a 'ping'
-        LOG.info('ping occuring')
+        LOG.info("ping occuring")
         self.send_response(204)
         self.end_headers()
 
@@ -303,14 +326,17 @@ class ForkingHTTPServer(socketserver.ForkingMixIn, http.server.HTTPServer):
     pass
 
 
-def setup_server(/, mars_executable, host, port, timeout=30, logdir="."):
+def setup_server(mars_executable, host, port, timeout=30, logdir="."):
+    _ = {
+        "mars_executable": mars_executable,
+        "timeout": timeout,
+        "logdir": logdir,
+    }
+
     class ThisHandler(Handler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(
-                mars_executable=mars_executable,
-                timeout=timeout,
-                logdir=logdir,
-            )
+        timeout = _["timeout"]
+        mars_executable = _["mars_executable"]
+        logdir = _["logdir"]
 
     server = ForkingHTTPServer((host, port), ThisHandler)
     return server

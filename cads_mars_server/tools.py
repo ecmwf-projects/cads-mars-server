@@ -1,5 +1,4 @@
 def bytes(n):
-
     if n < 0:
         sign = "-"
         n -= 0
