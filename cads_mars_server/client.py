@@ -5,6 +5,7 @@ import socket
 import time
 
 import requests
+import setproctitle
 import urllib3
 from urllib3.connectionpool import HTTPConnectionPool
 
@@ -228,16 +229,22 @@ class RemoteMarsClientCluster:
 
     def execute(self, request, environ, target):
         random.shuffle(self.urls)
-        for url in self.urls:
-            client = RemoteMarsClient(url, self.retries, self.delay, self.timeout)
-            reply = client.execute(request, environ, target)
-            if not reply.error:
-                return reply
+        saved = setproctitle.getproctitle()
+        request_id = request.get("request_id", "unknown")
+        try:
+            for url in self.urls:
+                setproctitle.setproctitle(f"cads_mars_server {request_id} {url}")
+                client = RemoteMarsClient(url, self.retries, self.delay, self.timeout)
+                reply = client.execute(request, environ, target)
+                if not reply.error:
+                    return reply
 
-            if not reply.retry_next_host:
-                return reply
+                if not reply.retry_next_host:
+                    return reply
 
-            LOG.error(f"Error {reply}")
-            LOG.error(f"Retry on the next host {url}")
+                LOG.error(f"Error {reply}")
+                LOG.error(f"Retry on the next host {url}")
+        finally:
+            setproctitle.setproctitle(saved)
 
         return reply
