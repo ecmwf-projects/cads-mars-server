@@ -251,13 +251,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
                 kwargs[message] = code
                 if message == "killed":
-                    # Don't retry if killed KILL or TERM, so we can cancel the job
+                    # Don't retry if killed KILL so we can cancel the job
                     kwargs["retry_next_host"] = code in (
                         signal.SIGHUP,
-                        signal.SIGINT,
+                        signal.SIGTERM,
                         signal.SIGQUIT,
                     )
-                    kwargs["retry_same_host"] = code in (signal.SIGQUIT,)
+                    kwargs["retry_same_host"] = False
 
                 send_header(status, **kwargs)
                 self.wfile.write(json.dumps(kwargs).encode())
