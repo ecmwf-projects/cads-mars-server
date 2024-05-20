@@ -22,6 +22,7 @@ logging.basicConfig(
 )
 
 LOG = logging.getLogger(__name__)
+ACCEPT_SOCKET = None
 
 
 def validate_uuid(uid):
@@ -323,9 +324,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(204)
         self.end_headers()
 
+    def handle(self) -> None:
+        """
+        Close the accept socket so the main server can restart
+        without a "Address already in use" error.
+        """
+        ACCEPT_SOCKET.close()
+        return super().handle()
+
 
 class ReuseAddressHTTPServer(http.server.HTTPServer):
     def server_bind(self):
+        global ACCEPT_SOCKET
+        ACCEPT_SOCKET = self.socket
+
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.setsockopt(
             socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
