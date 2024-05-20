@@ -5,9 +5,9 @@ import socket
 import time
 
 import requests
+import setproctitle
 import urllib3
 from urllib3.connectionpool import HTTPConnectionPool
-import setproctitle
 
 from .tools import bytes
 
@@ -238,7 +238,14 @@ class RemoteMarsClientCluster:
 
                 setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
 
-                client = RemoteMarsClient(url, self.retries, self.delay, self.timeout, log=self.log)
+                client = RemoteMarsClient(
+                    url,
+                    self.retries,
+                    self.delay,
+                    self.timeout,
+                    log=self.log,
+                )
+
                 reply = client.execute(request, environ, target)
                 if not reply.error:
                     return reply
