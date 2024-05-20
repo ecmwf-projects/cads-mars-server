@@ -5,9 +5,9 @@ import socket
 import time
 
 import requests
-import setproctitle
 import urllib3
 from urllib3.connectionpool import HTTPConnectionPool
+import setproctitle
 
 from .tools import bytes
 
@@ -221,20 +221,24 @@ class RemoteMarsClient:
 
 
 class RemoteMarsClientCluster:
-    def __init__(self, urls, retries=3, delay=10, timeout=60):
+    def __init__(self, urls, retries=3, delay=10, timeout=60, log=LOG):
         self.urls = urls
         self.retries = retries
         self.delay = delay
         self.timeout = timeout
+        self.log = log
 
     def execute(self, request, environ, target):
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
         request_id = request.get("request_id", "unknown")
         try:
+
             for url in self.urls:
-                setproctitle.setproctitle(f"cads_mars_server {request_id} {url}")
-                client = RemoteMarsClient(url, self.retries, self.delay, self.timeout)
+
+                setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
+
+                client = RemoteMarsClient(url, self.retries, self.delay, self.timeout, log=self.log)
                 reply = client.execute(request, environ, target)
                 if not reply.error:
                     return reply
