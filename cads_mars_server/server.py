@@ -5,7 +5,9 @@ import logging
 import os
 import re
 import signal
+import socket
 import socketserver
+import struct
 import time
 import uuid
 
@@ -322,7 +324,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
 
-class ForkingHTTPServer(socketserver.ForkingMixIn, http.server.HTTPServer):
+class ReuseAddressHTTPServer(http.server.HTTPServer):
+    def server_bind(self):
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.setsockopt(
+            socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
+        )
+        super().server_bind()
+
+
+class ForkingHTTPServer(socketserver.ForkingMixIn, ReuseAddressHTTPServer):
     pass
 
 
