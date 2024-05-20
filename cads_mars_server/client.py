@@ -240,7 +240,7 @@ class RemoteMarsClientCluster:
     def execute(self, request, environ, target):
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
-        request_id = request.get("request_id", "unknown")
+        request_id = environ.get("request_id", "unknown")
         try:
 
             for url in self.urls:
