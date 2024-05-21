@@ -234,7 +234,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             os.close(fd)
             _, code = os.waitpid(pid, 0)
 
-            if count == 0 and code != 0:
+            if code != 0:
                 kwargs = {}
 
                 if os.WIFSIGNALED(code):
@@ -262,8 +262,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     )
                     kwargs["retry_same_host"] = False
 
-                send_header(status, **kwargs)
-                self.wfile.write(json.dumps(kwargs).encode())
+                LOG.error("MARS exited in error %s", kwargs)
+                if count == 0:
+                    LOG.error("Sending error message in header")
+                    send_header(status, **kwargs)
+                    self.wfile.write(json.dumps(kwargs).encode())
+                else:
+                    LOG.error("Sending error message in stream")
+                    self.wfile.write("4\r\nEROR\r\n".encode())
+                    message = json.dumps(kwargs)
+                    self.wfile.write(f"{len(message):x}\r\n{message}\r\n".encode())
+                    self.wfile.write("0\r\n\r\n".encode())
 
         elapsed = time.time() - start
         LOG.info(

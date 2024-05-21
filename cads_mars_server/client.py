@@ -1,4 +1,5 @@
 import http
+import json
 import logging
 import random
 import socket
@@ -49,6 +50,20 @@ class Result:
         )
 
 
+class ClientError(Exception):
+    def __init__(self, message):
+        self.message = message
+        self.retry_same_host = message.get("retry_same_host", False)
+        self.retry_next_host = message.get("retry_next_host", False)
+
+    def __str__(self):
+        if "exited" in self.message:
+            return f"MARS client error exited with exit code {self.message['exited']}"
+        if "killed" in self.message:
+            return f"MARS client killed with signal {self.message['killed']}"
+        return f"MARS client error {self.message}"
+
+
 class RemoteMarsClientSession:
     def __init__(self, url, request, environ, target, timeout=60, log=LOG):
         self.url = url
@@ -76,6 +91,14 @@ class RemoteMarsClientSession:
                         continue
 
                     if chunk == b"EROR":
+
+                        try:
+                            message = json.loads(next(r.raw.read_chunked()))
+                            LOG.error(f"Error received {message}")
+                            raise ClientError(message)
+                        except (StopIteration, json.decoder.JSONDecodeError):
+                            pass
+
                         raise ValueError("Error received")
 
                     if chunk == b"ENDR":
@@ -162,11 +185,18 @@ class RemoteMarsClientSession:
         if code == http.HTTPStatus.OK:
             try:
                 self._transfer(r)
+            except ClientError as e:
+                self.log.exception("Error transferring file (ClientError)")
+                return Result(
+                    error=e,
+                    retry_same_host=e.retry_same_host,
+                    retry_next_host=e.retry_next_host,
+                )
             except urllib3.exceptions.ProtocolError as e:
-                self.log.exception("Error transferring file (1)")
+                self.log.exception("Error transferring file (ProtocolError)")
                 return Result(error=e, retry_same_host=True, retry_next_host=True)
             except Exception as e:
-                self.log.exception("Error transferring file (2)")
+                self.log.exception("Error transferring file (Other errors)")
                 error = e
 
         logfile = None
