@@ -339,9 +339,7 @@ class ReuseAddressHTTPServer(http.server.HTTPServer):
         ACCEPT_SOCKET = self.socket
 
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.setsockopt(
-            socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
-        )
+
         super().server_bind()
 
 
