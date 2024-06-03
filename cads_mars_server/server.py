@@ -180,7 +180,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 f"Sending header code={code} exited={exited} killed={killed}"
                 f" retry_same_host={retry_same_host} retry_next_host={retry_next_host}"
             )
-            signal.alarm(self.timeout)
+            signal.alarm(20)
             self.send_response(code)
             self.send_header("X-MARS-UID", uid)
             if exited is None and killed is None:
@@ -216,7 +216,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     send_header(200)
 
                 # socket timeout is not working
-                signal.alarm(self.timeout)
+                signal.alarm(20)
                 total += len(data)
                 # LOG.info(f"Sending data {len(data)} total {total:_}")
                 try:
