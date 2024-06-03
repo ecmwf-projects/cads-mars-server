@@ -275,7 +275,7 @@ class RemoteMarsClientCluster:
 
             for url in self.urls:
 
-                setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
+                # setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
 
                 client = RemoteMarsClient(
                     url,
