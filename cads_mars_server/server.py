@@ -208,9 +208,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             os.set_blocking(fd, True)
 
             while True:
+
+                ready, _, _ = select.select([fd, self.rfile], [], [])
+
                 data = os.read(fd, self.wbufsize)
 
-                ready, _, _ = select.select([fd, self.rfile], [])
                 if self.rfile in ready:
                     LOG.error("Client closed connection")
                     try:
