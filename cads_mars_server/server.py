@@ -219,7 +219,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 signal.alarm(self.timeout)
                 total += len(data)
                 # LOG.info(f"Sending data {len(data)} total {total:_}")
-                self.wfile.write(data)
+                try:
+                    self.wfile.write(data)
+                except IOError:
+                    try:
+                        LOG.error("Error sending data")
+                        LOG.error("Killing mars process %s", pid)
+                        os.kill(pid, signal.SIGKILL)
+                    except Exception as e:
+                        LOG.error("Error killing mars process %s", e)
+                        pass
+                    raise
                 signal.alarm(0)
 
                 count += 1
