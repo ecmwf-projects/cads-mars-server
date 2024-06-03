@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import select
 import signal
 import socket
 import socketserver
@@ -208,6 +209,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             while True:
                 data = os.read(fd, self.wbufsize)
+
+                ready, _, _ = select.select([fd, self.rfile], [])
+                if self.rfile in ready:
+                    LOG.error("Client closed connection")
+                    try:
+                        LOG.error("Killing mars process %s", pid)
+                        os.kill(pid, signal.SIGKILL)
+                    except Exception as e:
+                        LOG.error("Error killing mars process %s", e)
+                        pass
+                    raise IOError("Client closed connection")
 
                 if not data:
                     break
