@@ -61,6 +61,7 @@ class ClientError(Exception):
             return f"MARS client error exited with exit code {self.message['exited']}"
         if "killed" in self.message:
             return f"MARS client killed with signal {self.message['killed']}"
+        self.retry_next_host = "Failed to write chunked buffer" in self.message or "(Illegal seek)" in self.message
         return f"MARS client error {self.message}"
 
 
