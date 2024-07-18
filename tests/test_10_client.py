@@ -1,4 +1,5 @@
-def test_client_import():
-    from cads_mars_server import client
+from cads_mars_server import client
 
+
+def test_client_import():
     assert client
