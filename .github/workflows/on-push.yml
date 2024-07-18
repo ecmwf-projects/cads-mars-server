@@ -143,13 +143,13 @@ jobs:
   integration-tests:
     needs: [combine-environments, unit-tests]
     if: |
-      success() && false
+      success() && true
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
         include:
-        - python-version: '3.11'
+        - python-version: '3.6'
           extra: -integration
 
     steps:

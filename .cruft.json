@@ -10,7 +10,7 @@
       "copyright_holder": "European Union",
       "copyright_year": "2024",
       "mypy_strict": false,
-      "integration_tests": false,
+      "integration_tests": "true",
       "_template": "https://github.com/ecmwf-projects/cookiecutter-conda-package"
     }
   },

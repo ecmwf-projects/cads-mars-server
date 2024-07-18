@@ -1,4 +1,8 @@
-def test_cli_import():
-    from cads_mars_server import cli
+import subprocess
 
-    assert cli
+
+def test_cli_help():
+    captured = subprocess.run(["cads-mars-server"], capture_output=True)
+    assert not captured.returncode
+    assert captured.stdout
+    assert not captured.stderr
