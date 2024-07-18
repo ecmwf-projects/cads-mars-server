@@ -15,7 +15,7 @@ from .tools import bytes
 LOG = logging.getLogger(__name__)
 
 
-class ConnectionWithKeepAlive(HTTPConnectionPool.ConnectionCls):
+class ConnectionWithKeepAlive(HTTPConnectionPool.ConnectionCls):  # type: ignore[valid-type,misc]
     def _new_conn(self):
         conn = super()._new_conn()
         conn.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
@@ -91,7 +91,6 @@ class RemoteMarsClientSession:
                         continue
 
                     if chunk == b"EROR":
-
                         try:
                             message = json.loads(next(r.raw.read_chunked()))
                             LOG.error(f"Error received {message}")
@@ -270,11 +269,9 @@ class RemoteMarsClientCluster:
     def execute(self, request, environ, target):
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
-        request_id = environ.get("request_id", "unknown")
+        # request_id = environ.get("request_id", "unknown")
         try:
-
             for url in self.urls:
-
                 # setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
 
                 client = RemoteMarsClient(
