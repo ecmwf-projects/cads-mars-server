@@ -1,0 +1,19 @@
+{
+  "template": "https://github.com/ecmwf-projects/cookiecutter-conda-package",
+  "commit": "3b34cec552be24da244f3ec6133685c83a4e9f6c",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "cads-mars-server",
+      "project_slug": "cads_mars_server",
+      "project_short_description": "A proxy MARS server and client designed for CADS",
+      "copyright_holder": "European Union",
+      "copyright_year": "2024",
+      "mypy_strict": false,
+      "integration_tests": "true",
+      "pypi": true,
+      "_template": "https://github.com/ecmwf-projects/cookiecutter-conda-package"
+    }
+  },
+  "directory": null
+}

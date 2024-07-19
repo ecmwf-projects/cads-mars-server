@@ -1,4 +1,3 @@
-import argparse
 import http.server
 import json
 import logging
@@ -8,7 +7,6 @@ import select
 import signal
 import socket
 import socketserver
-import struct
 import time
 import uuid
 
@@ -208,7 +206,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             os.set_blocking(fd, True)
 
             while True:
-
                 ready, _, _ = select.select([fd, self.rfile], [], [])
 
                 data = os.read(fd, self.wbufsize)
@@ -304,10 +301,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
 
     def do_GET(self):
-        """
-        Retrieve the log file for the given UID.
-        """
-
+        """Retrieve the log file for the given UID."""
         uid = self.path.split("/")[-1]
 
         LOG.info("GET %s", uid)
@@ -332,10 +326,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(f.read())
 
     def do_DELETE(self):
-        """
-        Delete the log file for the given UID.
-        """
-
+        """Delete the log file for the given UID."""
         uid = self.path.split("/")[-1]
 
         LOG.info("DELETE %s", uid)
@@ -358,10 +349,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
     def handle(self):
-        """
-        Close the accept socket so the main server can restart
-        without a "Address already in use" error.
-        """
+        """Close the accept socket so the main server can restart without a "Address already in use" error."""
         ACCEPT_SOCKET.close()
         return super().handle()
 

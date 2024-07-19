@@ -42,9 +42,7 @@ logger = logging.getLogger(__name__)
     default="./server.list",
 )
 def this_client(request_file, target, uid, server_list) -> None:
-    """
-    A MARS client is spawned to execute a request. The request should be passed as a JSON file.
-    """
+    """Spawn a MARS client to execute a request. Pass the request as a JSON file."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(process)d %(levelname)s %(module)s - %(funcName)s: %(message)s",
@@ -120,9 +118,7 @@ def this_client(request_file, target, uid, server_list) -> None:
 def this_server(
     mars_executable, host, port, timeout, logdir, pidfile, daemonize
 ) -> None:
-    """
-    Set up a MARS server to execute requests.
-    """
+    """Set up a MARS server to execute requests."""
     logger.info(f"Starting Server {host}:{port} {logdir}")
 
     _server = server.setup_server(mars_executable, host, port, timeout, logdir)

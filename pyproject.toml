@@ -1,5 +1,6 @@
 [build-system]
-requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools", "setuptools_scm"]  # Unpinned to support py3.6
 
 [project]
 classifiers = [
@@ -9,34 +10,59 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Topic :: Scientific/Engineering"
 ]
 dependencies = [
-"click",
-"requests",
-"setproctitle"
+  "click",
+  "requests",
+  "setproctitle"
 ]
-description = "A micro MARS server and client for distributed services"
+description = "A proxy MARS server and client designed for CADS"
 dynamic = ["version"]
 license = {file = "LICENSE"}
 name = "cads-mars-server"
 readme = "README.md"
 
+[project.scripts]
+cads-mars-server = "cads_mars_server.__main__:mars_cli"
 
-[tool.isort]
-profile = "black"
+[tool.coverage.run]
+branch = true
 
-[tool.pydocstyle]
-add_ignore = ["D1, D2, D4"]
+[tool.mypy]
+strict = false
+
+[tool.ruff]
+# Same as Black.
+indent-width = 4
+line-length = 88
+
+[tool.ruff.lint]
+ignore = [
+  # pydocstyle: Missing Docstrings
+  "D1"
+]
+select = [
+  # pyflakes
+  "F",
+  # pycodestyle
+  "E",
+  "W",
+  # isort
+  "I",
+  # pydocstyle
+  "D"
+]
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 110
+
+[tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
 [tool.setuptools]
 packages = ["cads_mars_server"]
-
-[project.scripts]
-cads_mars_server = "cads_mars_server.cli:mars_cli"
 
 [tool.setuptools_scm]
 write_to = "cads_mars_server/version.py"
