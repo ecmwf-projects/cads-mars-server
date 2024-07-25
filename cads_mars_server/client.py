@@ -1,6 +1,7 @@
 import http
 import json
 import logging
+import os
 import random
 import socket
 import time
@@ -65,7 +66,18 @@ class ClientError(Exception):
 
 
 class RemoteMarsClientSession:
-    def __init__(self, url, request, environ, target, timeout=60, log=LOG):
+    def __init__(
+        self,
+        *,
+        url,
+        request,
+        environ,
+        target,
+        open_mode="wb",
+        position=0,
+        timeout=60,
+        log=LOG,
+    ):
         self.url = url
         self.request = request
         self.environ = environ
@@ -74,11 +86,13 @@ class RemoteMarsClientSession:
         self.endr_recieved = False
         self.timeout = timeout
         self.log = log
+        self.open_mode = open_mode
+        self.position = position
 
     def _transfer(self, r):
         start = time.time()
         total = 0
-        with open(self.target, "wb") as f:
+        with open(self.target, self.open_mode) as f:
             self.endr_recieved = False
             count = 0
             for chunk in r.raw.read_chunked():
@@ -86,8 +100,8 @@ class RemoteMarsClientSession:
                 total += len(chunk)
                 if len(chunk) == 4:
                     if chunk == b"RWND":
-                        f.seek(0)
-                        f.truncate(0)
+                        f.seek(self.position)
+                        f.truncate(self.position)
                         continue
 
                     if chunk == b"EROR":
@@ -225,20 +239,34 @@ class RemoteMarsClientSession:
 
 
 class RemoteMarsClient:
-    def __init__(self, url, retries=3, delay=10, timeout=60, log=LOG):
+    def __init__(
+        self,
+        *,
+        url,
+        open_mode="wb",
+        position=0,
+        retries=3,
+        delay=10,
+        timeout=60,
+        log=LOG,
+    ):
         self.url = url
         self.retries = retries
         self.delay = delay
         self.timeout = timeout
         self.log = log
+        self.open_mode = open_mode
+        self.position = position
 
     def execute(self, request, environ, target):
         session = RemoteMarsClientSession(
-            self.url,
-            request,
-            environ,
-            target,
-            self.timeout,
+            url=self.url,
+            request=request,
+            environ=environ,
+            target=target,
+            timeout=self.timeout,
+            open_mode=self.open_mode,
+            position=self.position,
             log=self.log,
         )
 
@@ -267,6 +295,33 @@ class RemoteMarsClientCluster:
         self.log = log
 
     def execute(self, request, environ, target):
+        if isinstance(request, dict):
+            return self._execute(request, environ, target, "wb", 0)
+
+        req = {}
+        open_mode = "wb"
+        position = 0
+        messages = []
+
+        for r in request:
+            req.update(r)
+
+            result = self._execute(
+                request, environ, target, open_mode=open_mode, position=position
+            )
+            messages.append(result.message)
+
+            if result.error:
+                result.message = "\n".join(messages)
+                return result
+
+            open_mode = "ab"
+            position = os.path.getsize(target)
+
+        result.message = "\n".join(messages)
+        return result
+
+    def _execute(self, request, environ, target, open_mode, position):
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
         # request_id = environ.get("request_id", "unknown")
@@ -275,10 +330,12 @@ class RemoteMarsClientCluster:
                 # setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
 
                 client = RemoteMarsClient(
-                    url,
-                    self.retries,
-                    self.delay,
-                    self.timeout,
+                    url=url,
+                    retries=self.retries,
+                    delay=self.delay,
+                    timeout=self.timeout,
+                    open_mode=open_mode,
+                    position=position,
                     log=self.log,
                 )
 
