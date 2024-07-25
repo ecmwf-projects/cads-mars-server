@@ -307,7 +307,7 @@ class RemoteMarsClientCluster:
             req.update(r)
 
             result = self._execute(
-                request, environ, target, open_mode=open_mode, position=position
+                req, environ, target, open_mode=open_mode, position=position
             )
             messages.append(result.message)
 
