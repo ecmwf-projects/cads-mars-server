@@ -20,6 +20,6 @@ try:
     from .version import __version__
 except ImportError:  # pragma: no cover
     # Local copy or not installed with setuptools
-    __version__ = "0.2.5"
+    __version__ = "999"
 
 __all__ = ["__version__"]
