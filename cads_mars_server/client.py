@@ -309,7 +309,7 @@ class RemoteMarsClientCluster:
             result = self._execute(
                 req, environ, target, open_mode=open_mode, position=position
             )
-            messages.append(result.message)
+            messages.append(f"{result.message}")
 
             if result.error:
                 result.message = "\n".join(messages)
