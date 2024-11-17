@@ -191,7 +191,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         request = data["request"]
         environ = data["environ"]
-        type = data.get("type", "pipe")
+        type = data.get("type", "file")
 
         LOG.info("POST %s %s", request, environ)
 
