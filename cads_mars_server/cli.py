@@ -5,7 +5,8 @@ import sys
 
 import click
 
-from . import client, server
+from . import client_pipe as client
+from . import server
 
 
 # Create empty click group
