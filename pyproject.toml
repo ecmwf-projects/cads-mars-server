@@ -16,7 +16,8 @@ classifiers = [
 dependencies = [
   "click",
   "requests",
-  "setproctitle"
+  "setproctitle",
+  "pymemcache"
 ]
 description = "A proxy MARS server and client designed for CADS"
 dynamic = ["version"]

@@ -12,57 +12,14 @@ import urllib3
 from urllib3.connectionpool import HTTPConnectionPool
 
 from .tools import bytes
+from .client_pipe import ConnectionWithKeepAlive, Result, ClientError
 
 LOG = logging.getLogger(__name__)
 
-
-class ConnectionWithKeepAlive(HTTPConnectionPool.ConnectionCls):  # type: ignore[valid-type,misc]
-    def _new_conn(self):
-        conn = super()._new_conn()
-        conn.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        if hasattr(socket, "TCP_KEEPIDLE"):
-            conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60 * 10)
-        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
-        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
-        return conn
+CACHE_ROOT = '/cache'
 
 
 HTTPConnectionPool.ConnectionCls = ConnectionWithKeepAlive
-
-
-class Result:
-    def __init__(
-        self,
-        error=None,
-        message=None,
-        retry_same_host=False,
-        retry_next_host=False,
-    ):
-        self.error = error
-        self.message = message
-        self.retry_same_host = retry_same_host
-        self.retry_next_host = retry_next_host
-
-    def __repr__(self):
-        message = "None" if self.message is None else self.message[:10]
-        return (
-            f"{self.__class__.__name__}(error={self.error!r}, retry_same_host={self.retry_same_host},"
-            f" retry_next_host={self.retry_next_host}, message={message}... )"
-        )
-
-
-class ClientError(Exception):
-    def __init__(self, message):
-        self.message = message
-        self.retry_same_host = message.get("retry_same_host", False)
-        self.retry_next_host = message.get("retry_next_host", False)
-
-    def __str__(self):
-        if "exited" in self.message:
-            return f"MARS client error exited with exit code {self.message['exited']}"
-        if "killed" in self.message:
-            return f"MARS client killed with signal {self.message['killed']}"
-        return f"MARS client error {self.message}"
 
 
 class RemoteMarsClientSession:
@@ -237,7 +194,7 @@ class RemoteMarsClientSession:
         except Exception:
             pass
 
-class RemoteMarsClientSessionFile:
+class RemoteMarsClientSession:
     def __init__(
         self,
         *,
@@ -324,9 +281,12 @@ class RemoteMarsClientSessionFile:
                 exitcode = int(r.headers["X-MARS-EXIT-CODE"])
                 self.log.error(f"MARS client exited with code {exitcode}")
 
+        print(r.json(), os.path.join(CACHE_ROOT, r.json()['file']))
+
         if code == http.HTTPStatus.OK:
             try:
-                details = os.stat(self.request['target'])
+                details = os.stat(os.path.join(CACHE_ROOT, r.json()['file']))
+
                 assert details.st_size > 0, 'File not ready'
             except ClientError as e:
                 self.log.exception("Error transferring file (ClientError)")
@@ -367,7 +327,7 @@ class RemoteMarsClientSessionFile:
         except Exception:
             pass
 
-class RemoteMarsClientFile:
+class RemoteMarsClient:
     def __init__(
         self,
         *,
@@ -388,7 +348,7 @@ class RemoteMarsClientFile:
         self.position = position
 
     def execute(self, request, environ):
-        session = RemoteMarsClientSessionFile(
+        session = RemoteMarsClientSession(
             url=self.url,
             request=request,
             environ=environ,
@@ -414,7 +374,7 @@ class RemoteMarsClientFile:
         return reply
 
 
-class RemoteMarsClientClusterFile:
+class RemoteMarsClientCluster:
     def __init__(self, urls, retries=3, delay=10, timeout=60, log=LOG):
         self.urls = urls
         self.retries = retries
@@ -457,7 +417,7 @@ class RemoteMarsClientClusterFile:
             for url in self.urls:
                 # setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
 
-                client = RemoteMarsClientFile(
+                client = RemoteMarsClient(
                     url=url,
                     retries=self.retries,
                     delay=self.delay,
@@ -481,7 +441,7 @@ class RemoteMarsClientClusterFile:
 
         return reply
 
-class RemoteMarsClientClusterFile:
+class RemoteMarsClientCluster:
     def __init__(self, urls, retries=3, delay=10, timeout=60, log=LOG):
         self.urls = urls
         self.retries = retries
@@ -524,7 +484,7 @@ class RemoteMarsClientClusterFile:
             for url in self.urls:
                 # setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
 
-                client = RemoteMarsClientFile(
+                client = RemoteMarsClient(
                     url=url,
                     retries=self.retries,
                     delay=self.delay,

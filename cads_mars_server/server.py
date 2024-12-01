@@ -9,7 +9,10 @@ import socket
 import socketserver
 import time
 import uuid
-
+import hashlib
+import random
+from .config import get_config
+from pymemcache.client.hash import HashClient
 import setproctitle
 
 from .tools import bytes
@@ -23,15 +26,32 @@ logging.basicConfig(
 LOG = logging.getLogger(__name__)
 ACCEPT_SOCKET = None
 
+config = get_config()
+
+CACHE_ROOT = config['CACHE_ROOT']
+
+SHARES = config['SHARES']
+
+MARS_CACHE_FOLDER = config['MARS_CACHE_FOLDER']
+MEMCACHED = config['MEMCACHED']
+
+memcached_client = HashClient(MEMCACHED)
+
 
 def validate_uuid(uid):
     return re.match(r"^[a-f0-9-]{36}$", uid)
-
 
 # From the MARS code
 
 IDENT = r"[_0-9A-Za-z]+[_\.\-\+A-Za-z0-9:\t ]*[_\.\-\+A-Za-z0-9]*"
 NUMB = r"[\-\.]*[0-9]+[\.0-9]*[Ee]*[\-\+]*[0-9]*"
+
+
+def request_hash(request):
+    _rq = request.copy()
+    if 'target' in _rq:
+        _rq.pop('target')
+    return hashlib.md5(json.dumps(_rq, sort_keys=True).encode('utf-8')).hexdigest()
 
 
 def extract_transfer_bytes(file_path):
@@ -214,7 +234,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
         file=mars_target,
     )
 
-
     def do_POST(self):
         signal.signal(signal.SIGALRM, timeout_handler)
 
@@ -232,15 +251,158 @@ class Handler(http.server.BaseHTTPRequestHandler):
             uid = str(uuid.uuid4())
 
         setproctitle.setproctitle(f"cads_mars_server {uid}")
-        start = time.time()
 
-        fd, pid = self.client_type[type](
+        getattr(self, f'_{type}')(request, environ, uid)
+
+
+    def _pipe(self, request, environ, uid):
+
+        fd, pid = mars(
             mars_executable=self.mars_executable,
             request=request,
             uid=uid,
             logdir=self.logdir,
             environ=environ,
         )
+
+        count = 0
+
+        def send_header(
+            code,
+            exited=None,
+            killed=None,
+            retry_same_host=None,
+            retry_next_host=None,
+        ):
+            LOG.info(
+                f"Sending header code={code} exited={exited} killed={killed}"
+                f" retry_same_host={retry_same_host} retry_next_host={retry_next_host}"
+            )
+            signal.alarm(20)
+            self.send_response(code)
+            self.send_header("X-MARS-UID", uid)
+            if exited is None and killed is None:
+                self.send_header("Content-type", "application/binary")
+                self.send_header("Transfer-Encoding", "chunked")
+            else:
+                self.send_header("Content-type", "application/json")
+                if exited is not None:
+                    self.send_header("X-MARS-EXIT-CODE", str(exited))
+                if killed is not None:
+                    self.send_header("X-MARS-SIGNAL", str(killed))
+                if retry_same_host is not None:
+                    self.send_header("X-MARS-RETRY-SAME-HOST", int(retry_same_host))
+                if retry_next_host is not None:
+                    self.send_header("X-MARS-RETRY-NEXT-HOST", int(retry_next_host))
+
+            self.end_headers()
+            signal.alarm(0)
+
+        total = 0
+        start = time.time()
+        data = None
+        try:
+            os.set_blocking(fd, True)
+
+            while True:
+                ready, _, _ = select.select([fd, self.rfile], [], [])
+
+                data = os.read(fd, self.wbufsize)
+
+                if self.rfile in ready:
+                    LOG.error("Client closed connection")
+                    try:
+                        LOG.error("Killing mars process %s", pid)
+                        os.kill(pid, signal.SIGKILL)
+                    except Exception as e:
+                        LOG.error("Error killing mars process %s", e)
+                        pass
+                    raise IOError("Client closed connection")
+
+                if not data:
+                    break
+
+                if count == 0:
+                    send_header(200)
+
+                # socket timeout is not working
+                signal.alarm(20)
+                total += len(data)
+                # LOG.info(f"Sending data {len(data)} total {total:_}")
+                try:
+                    self.wfile.write(data)
+                except IOError:
+                    try:
+                        LOG.error("Error sending data")
+                        LOG.error("Killing mars process %s", pid)
+                        os.kill(pid, signal.SIGKILL)
+                    except Exception as e:
+                        LOG.error("Error killing mars process %s", e)
+                        pass
+                    raise
+                signal.alarm(0)
+
+                count += 1
+
+        except:
+            LOG.exception("Error sending data")
+            raise
+
+        finally:
+            signal.alarm(0)  # Just in case
+
+            os.close(fd)
+            _, code = os.waitpid(pid, 0)
+
+            if code != 0:
+                kwargs = {}
+
+                if os.WIFSIGNALED(code):
+                    status = 500
+                    code = os.WTERMSIG(code)
+                    message = "killed"
+                else:
+                    # Because MARS runs in a shell, the exit code may be the value $?
+                    code = os.WEXITSTATUS(code)
+                    if code >= 128:  # Process terminated by signal
+                        status = 500
+                        code = code - 128
+                        message = "killed"
+                    else:
+                        status = 400
+                        message = "exited"
+
+                kwargs[message] = code
+                if message == "killed":
+                    # Don't retry if killed KILL so we can cancel the job
+                    kwargs["retry_next_host"] = code in (
+                        signal.SIGHUP,
+                        signal.SIGTERM,
+                        signal.SIGQUIT,
+                    )
+                    kwargs["retry_same_host"] = False
+
+                LOG.error("MARS exited in error %s", kwargs)
+                if count == 0:
+                    LOG.error("Sending error message in header")
+                    send_header(status, **kwargs)
+                    self.wfile.write(json.dumps(kwargs).encode())
+                else:
+                    LOG.error("Sending error message in stream")
+                    self.wfile.write("4\r\nEROR\r\n".encode())
+                    message = json.dumps(kwargs)
+                    self.wfile.write(f"{len(message):x}\r\n{message}\r\n".encode())
+                    self.wfile.write("0\r\n\r\n".encode())
+
+        elapsed = time.time() - start
+        LOG.info(
+            f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}, chunks: {count:,}"
+        )
+
+    def _file(self, request, environ, uid):
+
+        rq_hash = request_hash(request)
+        log_file = os.path.join(self.logdir, f"{uid}.log")
 
         def send_header(
                 code,
@@ -265,12 +427,43 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.send_header("X-MARS-RETRY-SAME-HOST", int(retry_same_host))
                 if retry_next_host is not None:
                     self.send_header("X-MARS-RETRY-NEXT-HOST", int(retry_next_host))
-
                 self.end_headers()
+                memcached_client.set(rq_hash, out_file.replace(CACHE_ROOT + '/', ''))
+                self.wfile.write(
+                    json.dumps(
+                        {
+                            'file': out_file.replace(CACHE_ROOT + '/', ''),
+                            'size': os.stat(out_file).st_size
+                        }
+                    ).encode('utf-8')
+                )
                 signal.alarm(0)
 
+        cache = memcached_client.get(rq_hash).decode('utf-8')
+        if cache:
+            out_file = os.path.join(CACHE_ROOT, cache)
+            LOG.info(f'Cached request {rq_hash} for request {uid}')
+            if os.path.exists(out_file):
+                with open(log_file, 'w') as _f:
+                    _f.write('File retuend from cads_mars_server cache')
+                send_header(200)
+                return
+        else:
+            out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], MARS_CACHE_FOLDER,f'{rq_hash}.grib')
+
+        start = time.time()
+
+        request.update({'target': out_file})
+
+        fd, pid = mars_target(
+            mars_executable=self.mars_executable,
+            request=request,
+            uid=uid,
+            logdir=self.logdir,
+            environ=environ,
+        )
+
         wayting = True
-        log_file = os.path.join(self.logdir, f"{uid}.log")
 
         t0 = time.time()
         while wayting:
