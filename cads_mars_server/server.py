@@ -439,8 +439,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
                 signal.alarm(0)
 
-        cache = memcached_client.get(rq_hash).decode('utf-8')
+        cache = memcached_client.get(rq_hash)
         if cache:
+            cache = json.loads(cache.decode('utf-8')
+            if cache.startswith('running'):
+                worker = cache.split('')
+                LOG.info(f'Request for {rq_hash} is already running')
+                _t0 = time.time(.1)
+                while cache.startswith('running'):
+                    time.sleep(.1)
+                    cache = memcached_client.get(rq_hash).decode('utf-8')
+                    if int()
+
             out_file = os.path.join(CACHE_ROOT, cache)
             LOG.info(f'Cached request {rq_hash} for request {uid}')
             if os.path.exists(out_file):
