@@ -13,7 +13,7 @@ DEFAULT_CONFIG = dict(
 def get_config():
     if os.path.exists(DEFAULT_CONFIG_FILE):
         with open(DEFAULT_CONFIG_FILE, 'r') as _f:
-            config = yaml.safe_load(DEFAULT_CONFIG_FILE)
+            config = yaml.safe_load(_f)
     else:
         config = DEFAULT_CONFIG
     return config
