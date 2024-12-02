@@ -14,6 +14,7 @@ import random
 from .config import get_config
 from pymemcache.client.hash import HashClient
 import setproctitle
+from .cache import WorkerCache
 
 from .tools import bytes
 
@@ -35,7 +36,7 @@ SHARES = config['SHARES']
 MARS_CACHE_FOLDER = config['MARS_CACHE_FOLDER']
 MEMCACHED = config['MEMCACHED']
 
-memcached_client = HashClient(MEMCACHED)
+cache = WorkerCache(HashClient(MEMCACHED))
 
 
 def validate_uuid(uid):
@@ -439,39 +440,45 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
                 signal.alarm(0)
 
-        cache = memcached_client.get(rq_hash)
-        if cache:
-            cache = json.loads(cache.decode('utf-8')
-            if cache.startswith('running'):
+        _cache = cache.get(rq_hash)
+        if _cache:
+            if _cache['status'] == 'RUNNING':
                 worker = cache.split('')
                 LOG.info(f'Request for {rq_hash} is already running')
                 _t0 = time.time(.1)
-                while cache.startswith('running'):
+                while _cache['status'] == 'RUNNING' and 'size' not in _cache:
                     time.sleep(.1)
-                    cache = memcached_client.get(rq_hash).decode('utf-8')
-                    if int()
-
-            out_file = os.path.join(CACHE_ROOT, cache)
-            LOG.info(f'Cached request {rq_hash} for request {uid}')
-            if os.path.exists(out_file):
-                with open(log_file, 'w') as _f:
-                    _f.write('File retuend from cads_mars_server cache')
-                send_header(200)
-                return
+                    _cache = cache.get(rq_hash)
+            elif _cache['status'] == 'COMPLETED':
+                out_file = os.path.join(CACHE_ROOT, cache)
+                LOG.info(f'Cached request {rq_hash} for request {uid}')
+                if os.path.exists(out_file):
+                    with open(log_file, 'w') as _f:
+                        _f.write('File returned from cads_mars_server cache')
+                    send_header(200)
+                    return
         else:
             out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], MARS_CACHE_FOLDER,f'{rq_hash}.grib')
-
+            _cache = dict(
+                status='RUNNING',
+                host=os.uname().nodename,
+                MARS_CACHE_FOLDER=MARS_CACHE_FOLDER,
+                target=out_file
+            )
+            cache.set(
+                rq_hash, 
+            )
         start = time.time()
 
         request.update({'target': out_file})
-
-        fd, pid = mars_target(
-            mars_executable=self.mars_executable,
-            request=request,
-            uid=uid,
-            logdir=self.logdir,
-            environ=environ,
-        )
+        if 'size' not in _cache:
+            fd, pid = mars_target(
+                mars_executable=self.mars_executable,
+                request=request,
+                uid=uid,
+                logdir=self.logdir,
+                environ=environ,
+            )
 
         wayting = True
 
@@ -480,6 +487,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             expected_size = extract_transfer_bytes(log_file)
             if expected_size:
                 wayting = False
+                _cache.update({'size': expected_size})
+                cache.set(rq_hash, _cache)
                 break
             if time.time() - t0 > 40:
                 wayting = False
