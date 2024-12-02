@@ -433,16 +433,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(
                     json.dumps(result).encode('utf-8')
                 )
+                if result['status'] == 'FAILED':
+                    cache.delete(rq_hash)
                 signal.alarm(0)
 
         _cache = cache.get(rq_hash)
         if _cache:
-            if _cache['status'] == 'RUNNING':
+            if _cache['status'] in ['RUNNING', 'QUEUED']:
                 LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
                 _t0 = time.sleep(.1)
-                while _cache['status'] == 'RUNNING' and 'size' not in _cache:
+                while 'size' not in _cache:
                     time.sleep(.1)
                     _cache = cache.get(rq_hash)
+                with open(log_file, 'w') as _f:
+                        _f.write('Waiting and serving file from cads_mars_server cache')
             elif _cache['status'] == 'COMPLETED':
                 out_file = os.path.join(CACHE_ROOT, cache)
                 LOG.info(f'Cached request {rq_hash} for request {uid}')
@@ -454,11 +458,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         else:
             out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], MARS_CACHE_FOLDER,f'{rq_hash}.grib')
             _cache = dict(
-                status='RUNNING',
+                status='QUEUED',
                 host=os.uname().nodename,
                 mars=MARS_CACHE_FOLDER,
                 share=out_file.split('/')[1],
-                target=out_file
+                target=out_file,
+                access=0
             )
             cache.set(rq_hash, _cache)
         start = time.time()
@@ -480,27 +485,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
             expected_size = extract_transfer_bytes(log_file)
             if expected_size:
                 wayting = False
-                _cache.update({'size': expected_size})
+                _cache.update({'size': expected_size, 'status': 'RUNNING', 'access': _cache.get('access', 0) + 1})
                 cache.set(rq_hash, _cache)
                 break
             if time.time() - t0 > 40:
                 wayting = False
             time.sleep(.004)
-        total = 0
+        total = os.stat(request['target']).st_size
         t0 = time.time()
-        while total < expected_size:
-            total = os.stat(request['target']).st_size
-            LOG.info(f'{total / expected_size * 100:0.2f}% of {expected_size}')
-            time.sleep(.1)
-
-        if os.path.exists(request['target']):
-            total = os.stat(request['target']).st_size
-
-        elapsed = time.time() - start
-        LOG.info(
-            f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
-        )
-        send_header(404 if total == 0 else 200, _cache)
+        if total < expected_size:
+            while True:
+                total = os.stat(request['target']).st_size
+                LOG.info(f'{total / expected_size * 100:0.2f}% of {expected_size}')
+                time.sleep(.1)
+        
+        if total == expected_size:
+            _cache.update({'status': 'COMPLETED'})
+            cache.set(rq_hash, _cache)
+            elapsed = time.time() - start
+            LOG.info(
+                f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
+            )
+            send_header(200, _cache)
+        else:
+            _cache['status'] = 'FAILED'
+            send_header(500, _cache)
 
 
     def do_GET(self):
