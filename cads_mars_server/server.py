@@ -465,9 +465,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 MARS_CACHE_FOLDER=MARS_CACHE_FOLDER,
                 target=out_file
             )
-            cache.set(
-                rq_hash, 
-            )
+            cache.set(rq_hash, _cache)
         start = time.time()
 
         request.update({'target': out_file})
