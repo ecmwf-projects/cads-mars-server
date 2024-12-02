@@ -407,6 +407,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         def send_header(
                 code,
+                result,
                 exited=None,
                 killed=None,
                 retry_same_host=None,
@@ -429,14 +430,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if retry_next_host is not None:
                     self.send_header("X-MARS-RETRY-NEXT-HOST", int(retry_next_host))
                 self.end_headers()
-                memcached_client.set(rq_hash, out_file.replace(CACHE_ROOT + '/', ''))
                 self.wfile.write(
-                    json.dumps(
-                        {
-                            'file': out_file.replace(CACHE_ROOT + '/', ''),
-                            'size': os.stat(out_file).st_size
-                        }
-                    ).encode('utf-8')
+                    json.dumps(result).encode('utf-8')
                 )
                 signal.alarm(0)
 
@@ -462,13 +457,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             _cache = dict(
                 status='RUNNING',
                 host=os.uname().nodename,
-                MARS_CACHE_FOLDER=MARS_CACHE_FOLDER,
+                mars=MARS_CACHE_FOLDER,
+                share=out_file.split('/')[1],
                 target=out_file
             )
             cache.set(rq_hash, _cache)
         start = time.time()
 
-        request.update({'target': out_file})
+        request.update({'target': _cache['target']})
         if 'size' not in _cache:
             fd, pid = mars_target(
                 mars_executable=self.mars_executable,
@@ -505,7 +501,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         LOG.info(
             f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
         )
-        send_header(404 if total == 0 else 200)
+        send_header(404 if total == 0 else 200, _cache)
 
 
     def do_GET(self):
