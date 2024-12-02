@@ -14,7 +14,7 @@ import random
 from .config import get_config
 from pymemcache.client.hash import HashClient
 import setproctitle
-from .cache import WorkerCache
+from .cache import WorkerCache, request_hash
 
 from .tools import bytes
 
@@ -46,13 +46,6 @@ def validate_uuid(uid):
 
 IDENT = r"[_0-9A-Za-z]+[_\.\-\+A-Za-z0-9:\t ]*[_\.\-\+A-Za-z0-9]*"
 NUMB = r"[\-\.]*[0-9]+[\.0-9]*[Ee]*[\-\+]*[0-9]*"
-
-
-def request_hash(request):
-    _rq = request.copy()
-    if 'target' in _rq:
-        _rq.pop('target')
-    return hashlib.md5(json.dumps(_rq, sort_keys=True).encode('utf-8')).hexdigest()
 
 
 def extract_transfer_bytes(file_path):
@@ -438,23 +431,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 signal.alarm(0)
 
         _cache = cache.get(rq_hash)
+        run = False
         if _cache:
             if _cache['status'] in ['RUNNING', 'QUEUED']:
                 LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
-                _t0 = time.sleep(.1)
-                while 'size' not in _cache:
-                    time.sleep(.1)
-                    _cache = cache.get(rq_hash)
                 with open(log_file, 'w') as _f:
                         _f.write('Waiting and serving file from cads_mars_server cache')
             elif _cache['status'] == 'COMPLETED':
-                out_file = os.path.join(CACHE_ROOT, cache)
+                out_file = _cache['target']
                 LOG.info(f'Cached request {rq_hash} for request {uid}')
                 if os.path.exists(out_file):
                     with open(log_file, 'w') as _f:
                         _f.write('File returned from cads_mars_server cache')
-                    send_header(200)
+                    send_header(200, _cache)
                     return
+            elif _cache['status'] == 'FAILED':
+                out_file = _cache['target']
+                _cache = dict(
+                    status='QUEUED',
+                    host=os.uname().nodename,
+                    mars=MARS_CACHE_FOLDER,
+                    share=out_file.split('/')[1],
+                    target=out_file,
+                    access=0
+                )
+                run = True
         else:
             out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], MARS_CACHE_FOLDER,f'{rq_hash}.grib')
             _cache = dict(
@@ -465,11 +466,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 target=out_file,
                 access=0
             )
+            run = True
             cache.set(rq_hash, _cache)
         start = time.time()
 
         request.update({'target': _cache['target']})
-        if 'size' not in _cache:
+        if run:
             fd, pid = mars_target(
                 mars_executable=self.mars_executable,
                 request=request,
@@ -477,11 +479,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 logdir=self.logdir,
                 environ=environ,
             )
+            cache.set(rq_hash, _cache)
 
         wayting = True
 
         t0 = time.time()
-        while wayting:
+        while wayting and run:
             expected_size = extract_transfer_bytes(log_file)
             if expected_size:
                 wayting = False
@@ -491,24 +494,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if time.time() - t0 > 40:
                 wayting = False
             time.sleep(.004)
-        total = os.stat(request['target']).st_size
+        total = 0
         t0 = time.time()
-        if total < expected_size:
-            while True:
-                total = os.stat(request['target']).st_size
-                LOG.info(f'{total / expected_size * 100:0.2f}% of {expected_size}')
-                time.sleep(.1)
-        
-        if total == expected_size:
-            _cache.update({'status': 'COMPLETED'})
-            cache.set(rq_hash, _cache)
-            elapsed = time.time() - start
-            LOG.info(
-                f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
-            )
-            send_header(200, _cache)
-        else:
+        try:
+            if total < expected_size:
+                while True:
+                    if os.path.exists(request['target']):
+                        total = os.stat(request['target']).st_size
+                        LOG.info(f'{total / expected_size * 100:0.2f}% of {expected_size}')
+                        if total >= expected_size:
+                            break
+                    time.sleep(.1)
+
+            if total == expected_size:
+                _cache.update({'status': 'COMPLETED'})
+                cache.set(rq_hash, _cache)
+                elapsed = time.time() - start
+                LOG.info(
+                    f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
+                )
+                send_header(200, _cache)
+        except:
             _cache['status'] = 'FAILED'
+            cache.set(rq_hash, _cache)
             send_header(500, _cache)
 
 
