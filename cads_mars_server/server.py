@@ -36,8 +36,6 @@ SHARES = config['SHARES']
 MARS_CACHE_FOLDER = config['MARS_CACHE_FOLDER']
 MEMCACHED = config['MEMCACHED']
 
-cache = WorkerCache(HashClient(MEMCACHED))
-
 
 def validate_uuid(uid):
     return re.match(r"^[a-f0-9-]{36}$", uid)
@@ -394,7 +392,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
 
     def _file(self, request, environ, uid):
-
+        cache = WorkerCache(HashClient(MEMCACHED))
         rq_hash = request_hash(request)
         log_file = os.path.join(self.logdir, f"{uid}.log")
 
@@ -436,7 +434,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if _cache['status'] in ['RUNNING', 'QUEUED']:
                 LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
                 with open(log_file, 'w') as _f:
-                        _f.write('Waiting and serving file from cads_mars_server cache')
+                    _f.write('Waiting and serving file from cads_mars_server cache')
+                    send_header(200, _cache)
+                    return
             elif _cache['status'] == 'COMPLETED':
                 out_file = _cache['target']
                 LOG.info(f'Cached request {rq_hash} for request {uid}')

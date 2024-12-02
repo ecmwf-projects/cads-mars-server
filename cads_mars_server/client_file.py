@@ -46,46 +46,7 @@ class RemoteMarsClientSession:
         self.open_mode = open_mode
         self.position = position
 
-    def _transfer(self, r):
-        start = time.time()
-        total = 0
-        with open(self.target, self.open_mode) as f:
-            self.endr_recieved = False
-            count = 0
-            for chunk in r.raw.read_chunked():
-                count += 1
-                total += len(chunk)
-                if len(chunk) == 4:
-                    if chunk == b"RWND":
-                        f.seek(self.position)
-                        f.truncate(self.position)
-                        continue
-
-                    if chunk == b"EROR":
-                        try:
-                            message = json.loads(next(r.raw.read_chunked()))
-                            LOG.error(f"Error received {message}")
-                            raise ClientError(message)
-                        except (StopIteration, json.decoder.JSONDecodeError):
-                            pass
-
-                        raise ValueError("Error received")
-
-                    if chunk == b"ENDR":
-                        self.endr_recieved = True
-                        continue
-
-                    raise ValueError(f"Unknown message {chunk}")
-
-                f.write(chunk)
-
-            if not self.endr_recieved:
-                raise ValueError("ENDR not received")
-
-        elapsed = time.time() - start
-        self.log.info(
-            f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
-        )
+    
 
     def execute(self):
         self.log.info(f"Calling {self.url} {self.request} {self.environ}")
@@ -495,7 +456,7 @@ class RemoteMarsClientCluster:
                     log=self.log,
                 )
 
-                reply = client.execute(request, environ, target)
+                reply = client.execute(request, environ)
                 if not reply.error:
                     return reply
 
