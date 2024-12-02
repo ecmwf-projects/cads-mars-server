@@ -438,8 +438,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         _cache = cache.get(rq_hash)
         if _cache:
             if _cache['status'] == 'RUNNING':
-                worker = cache.split('')
-                LOG.info(f'Request for {rq_hash} is already running')
+                LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
                 _t0 = time.time(.1)
                 while _cache['status'] == 'RUNNING' and 'size' not in _cache:
                     time.sleep(.1)
