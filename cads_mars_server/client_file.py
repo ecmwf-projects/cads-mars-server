@@ -281,11 +281,12 @@ class RemoteMarsClientSession:
                 exitcode = int(r.headers["X-MARS-EXIT-CODE"])
                 self.log.error(f"MARS client exited with code {exitcode}")
 
-        print(r.json(), os.path.join(CACHE_ROOT, r.json()['file']))
+        res = r.json()
+        print(res)
 
         if code == http.HTTPStatus.OK:
             try:
-                details = os.stat(os.path.join(CACHE_ROOT, r.json()['file']))
+                details = os.stat(res['target'])
 
                 assert details.st_size > 0, 'File not ready'
             except ClientError as e:
