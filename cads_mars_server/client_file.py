@@ -98,12 +98,16 @@ class RemoteMarsClientSession:
 
             if "X-MARS-RETRY-NEXT-HOST" in r.headers:
                 retry_next_host = int(r.headers["X-MARS-RETRY-NEXT-HOST"])
+            data = None
+            if "X-DATA" in r.headers:
+                data = json.loads(r.headers["X-DATA"])
 
             return Result(
                 error=error,
                 message=r.text or str(error),
                 retry_same_host=retry_same_host,
                 retry_next_host=retry_next_host or retry_same_host,
+                data=data
             )
 
         uid = r.headers["X-MARS-UID"]
@@ -162,8 +166,6 @@ class RemoteMarsClientSession:
         url,
         request,
         environ,
-        open_mode="wb",
-        position=0,
         timeout=60,
         log=LOG,
     ):
@@ -174,7 +176,6 @@ class RemoteMarsClientSession:
         self.endr_recieved = False
         self.timeout = timeout
         self.log = log
-        self.position = position
 
     def execute(self):
         self.log.info(f"Calling {self.url} {self.request} {self.environ}")
@@ -227,12 +228,15 @@ class RemoteMarsClientSession:
 
             if "X-MARS-RETRY-NEXT-HOST" in r.headers:
                 retry_next_host = int(r.headers["X-MARS-RETRY-NEXT-HOST"])
+            if "X-DATA" in r.headers:
+                data = json.loads(r.headers["X-DATA"])
 
             return Result(
                 error=error,
                 message=r.text or str(error),
                 retry_same_host=retry_same_host,
                 retry_next_host=retry_next_host or retry_same_host,
+                data=data
             )
 
         uid = r.headers["X-MARS-UID"]
@@ -241,25 +245,33 @@ class RemoteMarsClientSession:
             if "X-MARS-EXIT-CODE" in r.headers:
                 exitcode = int(r.headers["X-MARS-EXIT-CODE"])
                 self.log.error(f"MARS client exited with code {exitcode}")
-
-        res = r.json()
-        print(res)
+        # print(r.headers)
+        # assert r.headers['X-DATA'], f'No result presented'
+        # res = r.headers['X-DATA']
+        # print('xxxx', res)
+        # res = json.loads(res)
 
         if code == http.HTTPStatus.OK:
             try:
+                res = json.loads(r.headers['X-DATA'])
+            except:
+                print(r.headers)
+            print(res)
+            try:
                 details = os.stat(res['target'])
-
-                assert details.st_size > 0, 'File not ready'
+                while details.st_size < res['size'] and res['status'] in ('QUEUED', 'RUNNING', ):
+                    time.sleep(.5)
             except ClientError as e:
                 self.log.exception("Error transferring file (ClientError)")
                 return Result(
                     error=e,
                     retry_same_host=e.retry_same_host,
                     retry_next_host=e.retry_next_host,
+                    data=res
                 )
             except urllib3.exceptions.ProtocolError as e:
                 self.log.exception("Error transferring file (ProtocolError)")
-                return Result(error=e, retry_same_host=True, retry_next_host=True)
+                return Result(error=e, retry_same_host=True, retry_next_host=True, data=res)
             except Exception as e:
                 self.log.exception("Error transferring file (Other errors)")
                 error = e
@@ -280,7 +292,7 @@ class RemoteMarsClientSession:
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
             self.log.exception("Error deleting log file")
 
-        return Result(error=error, message=logfile or str(error))
+        return Result(error=error, message=logfile or str(error), data=res)
 
     def __del__(self):
         try:
@@ -294,8 +306,6 @@ class RemoteMarsClient:
         self,
         *,
         url,
-        open_mode="wb",
-        position=0,
         retries=3,
         delay=10,
         timeout=60,
@@ -306,8 +316,6 @@ class RemoteMarsClient:
         self.delay = delay
         self.timeout = timeout
         self.log = log
-        self.open_mode = open_mode
-        self.position = position
 
     def execute(self, request, environ):
         session = RemoteMarsClientSession(
@@ -315,8 +323,6 @@ class RemoteMarsClient:
             request=request,
             environ=environ,
             timeout=self.timeout,
-            open_mode=self.open_mode,
-            position=self.position,
             log=self.log,
         )
         self.log.info(f'Session for {self.url} prepared')
@@ -344,20 +350,18 @@ class RemoteMarsClientCluster:
         self.timeout = timeout
         self.log = log
 
-    def execute(self, request, environ, target):
+    def execute(self, request, environ):
         if isinstance(request, dict):
-            return self._execute(request, environ, target, "wb", 0)
+            return self._execute(request, environ)
 
         req = {}
-        open_mode = "wb"
-        position = 0
         messages = []
 
         for r in request:
             req.update(r)
 
             result = self._execute(
-                req, environ, target, open_mode=open_mode, position=position
+                req, environ
             )
             messages.append(f"{result.message}")
 
@@ -365,13 +369,10 @@ class RemoteMarsClientCluster:
                 result.message = "\n".join(messages)
                 return result
 
-            open_mode = "ab"
-            position = os.path.getsize(target)
-
         result.message = "\n".join(messages)
         return result
 
-    def _execute(self, request, environ, target, open_mode, position):
+    def _execute(self, request, environ):
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
         # request_id = environ.get("request_id", "unknown")
@@ -384,12 +385,10 @@ class RemoteMarsClientCluster:
                     retries=self.retries,
                     delay=self.delay,
                     timeout=self.timeout,
-                    open_mode=open_mode,
-                    position=position,
                     log=self.log,
                 )
 
-                reply = client.execute(request, environ, target)
+                reply = client.execute(request, environ)
                 if not reply.error:
                     return reply
 
@@ -411,20 +410,18 @@ class RemoteMarsClientCluster:
         self.timeout = timeout
         self.log = log
 
-    def execute(self, request, environ, target):
+    def execute(self, request, environ):
         if isinstance(request, dict):
-            return self._execute(request, environ, target, "wb", 0)
+            return self._execute(request, environ)
 
         req = {}
-        open_mode = "wb"
-        position = 0
         messages = []
 
         for r in request:
             req.update(r)
 
             result = self._execute(
-                req, environ, target, open_mode=open_mode, position=position
+                req, environ
             )
             messages.append(f"{result.message}")
 
@@ -432,13 +429,10 @@ class RemoteMarsClientCluster:
                 result.message = "\n".join(messages)
                 return result
 
-            open_mode = "ab"
-            position = os.path.getsize(target)
-
         result.message = "\n".join(messages)
         return result
 
-    def _execute(self, request, environ, target, open_mode, position):
+    def _execute(self, request, environ):
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
         # request_id = environ.get("request_id", "unknown")
@@ -451,8 +445,6 @@ class RemoteMarsClientCluster:
                     retries=self.retries,
                     delay=self.delay,
                     timeout=self.timeout,
-                    open_mode=open_mode,
-                    position=position,
                     log=self.log,
                 )
 
@@ -469,3 +461,12 @@ class RemoteMarsClientCluster:
             setproctitle.setproctitle(saved)
 
         return reply
+    
+class MarsAdaptor:
+    def __init__(
+            self,
+            request,
+            env
+    ) -> None:
+        self.request = request
+        self.env = env

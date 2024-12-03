@@ -37,11 +37,14 @@ class Result:
         message=None,
         retry_same_host=False,
         retry_next_host=False,
+        data=None
+
     ):
         self.error = error
         self.message = message
         self.retry_same_host = retry_same_host
         self.retry_next_host = retry_next_host
+        self.data = data
 
     def __repr__(self):
         message = "None" if self.message is None else self.message[:10]

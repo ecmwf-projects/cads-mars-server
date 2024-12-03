@@ -14,6 +14,7 @@ import random
 from .config import get_config
 from pymemcache.client.hash import HashClient
 import setproctitle
+import subprocess
 from .cache import WorkerCache, request_hash
 
 from .tools import bytes
@@ -154,9 +155,9 @@ def mars(*, mars_executable, request, uid, logdir, environ):
 
     os.execlpe(mars_executable, mars_executable, env)
 
-
-def mars_target(*, mars_executable, request, uid, logdir, environ):
+def mars_file(*, mars_executable, request, uid, logdir, environ):
     request_pipe_r, request_pipe_w = os.pipe()
+    
     pid = os.fork()
 
     if pid:
@@ -179,11 +180,11 @@ def mars_target(*, mars_executable, request, uid, logdir, environ):
                 if key != 'target':
                     out("{0}={1},\n".format(key, tidy(value)))
             out("{0}={1}\n".format('target', tidy(request['target'])))
-        
-        os.close(request_pipe_r)
-        os.close(request_pipe_w)
+            
+            os.close(request_pipe_r)
+            os.close(request_pipe_w)
 
-        return request_pipe_w, pid
+            return request_pipe_w, pid
 
     os.dup2(request_pipe_r, 0)
     os.close(request_pipe_w)
@@ -202,7 +203,60 @@ def mars_target(*, mars_executable, request, uid, logdir, environ):
             env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
 
     env.setdefault("MARS_ENVIRON_REQUEST_ID", uid)
-    LOG.info(f'{request_pipe_w} is a request?')
+    LOG.info(f'{request_pipe_w} : is it a request?')
+
+    os.execlpe(mars_executable, mars_executable, env)
+
+def mars_target(*, mars_executable, request, uid, logdir, environ):
+    request_pipe_r, request_pipe_w = os.pipe()
+    os.set_inheritable(request_pipe_r, True)
+    os.set_inheritable(request_pipe_w, True)
+    pid = os.fork()
+
+    if pid:
+        if isinstance(request, dict):
+            requests = [request]
+        else:
+            requests = request
+
+        assert isinstance(requests, list)
+
+
+        def out(text):
+            text = text.encode()
+            assert os.write(request_pipe_w, text) == len(text)
+
+        for request in requests:
+            out("RETRIEVE,\n")
+            
+            for key, value in request.items():
+                if key != 'target':
+                    out("{0}={1},\n".format(key, tidy(value)))
+            out("{0}={1}\n".format('target', tidy(request['target'])))
+            
+            os.close(request_pipe_r)
+            os.close(request_pipe_w)
+
+            return request_pipe_w, pid
+
+    os.dup2(request_pipe_r, 0)
+    os.close(request_pipe_w)
+    out = os.open(
+        os.path.join(logdir, f"{uid}.log"),
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+        0o644,
+    )
+    os.dup2(out, 1)
+    os.dup2(out, 2)
+
+    env = dict(os.environ)
+
+    for k, v in environ.items():
+        if v is not None:
+            env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
+
+    env.setdefault("MARS_ENVIRON_REQUEST_ID", uid)
+    LOG.info(f'{request_pipe_w} : is it a request?')
 
     os.execlpe(mars_executable, mars_executable, env)
 
@@ -416,20 +470,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.send_header("X-MARS-EXIT-CODE", str(exited))
                 if killed is not None:
                     self.send_header("X-MARS-SIGNAL", str(killed))
-                if retry_same_host is not None:
-                    self.send_header("X-MARS-RETRY-SAME-HOST", int(retry_same_host))
+                if retry_same_host is not None or result['status'] == 'QUEUED':
+                    self.send_header("X-MARS-RETRY-SAME-HOST", int(result['status'] == 'QUEUED' or retry_same_host is not None))
                 if retry_next_host is not None:
                     self.send_header("X-MARS-RETRY-NEXT-HOST", int(retry_next_host))
+                if result['status'] in ['RUNNING', 'COMPLETED'] :
+                    if result['size'] == os.stat(result['target']).st_size:
+                        result['status'] = 'COMPLETED'
+                        result['access'] += 1
+                        cache.set(rq_hash, result)
+                elif result['status'] == 'FAILED':
+                    if os.path.exists(result['target']):
+                        os.unlink(result['target'])
+                    cache.delete(rq_hash)
+                self.send_header("X-DATA", json.dumps(result))
                 self.end_headers()
                 self.wfile.write(
                     json.dumps(result).encode('utf-8')
                 )
-                if result['status'] == 'FAILED':
-                    cache.delete(rq_hash)
                 signal.alarm(0)
 
         _cache = cache.get(rq_hash)
-        run = False
+        run = _cache is not None
         if _cache:
             if _cache['status'] in ['RUNNING', 'QUEUED']:
                 LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
@@ -457,7 +519,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
                 run = True
         else:
-            out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], MARS_CACHE_FOLDER,f'{rq_hash}.grib')
+            out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], MARS_CACHE_FOLDER, f'{rq_hash}.grib')
             _cache = dict(
                 status='QUEUED',
                 host=os.uname().nodename,
@@ -471,7 +533,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         start = time.time()
 
         request.update({'target': _cache['target']})
-        if run:
+        if 'size' not in _cache:
             fd, pid = mars_target(
                 mars_executable=self.mars_executable,
                 request=request,
@@ -479,7 +541,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 logdir=self.logdir,
                 environ=environ,
             )
+            _cache.update({'pid': pid})
             cache.set(rq_hash, _cache)
+            self.wfile.write('Request submitted to mars\n')
 
         wayting = True
 
@@ -496,28 +560,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             time.sleep(.004)
         total = 0
         t0 = time.time()
-        try:
-            if total < expected_size:
-                while True:
-                    if os.path.exists(request['target']):
-                        total = os.stat(request['target']).st_size
-                        LOG.info(f'{total / expected_size * 100:0.2f}% of {expected_size}')
-                        if total >= expected_size:
-                            break
-                    time.sleep(.1)
+        # try:
+        if total < expected_size:
+            while True:
+                if os.path.exists(request['target']):
+                    total = os.stat(request['target']).st_size
+                    LOG.info(f'{total / expected_size * 100:0.2f}% of {expected_size}')
+                    if total >= expected_size:
+                        break
+                time.sleep(.1)
 
-            if total == expected_size:
-                _cache.update({'status': 'COMPLETED'})
-                cache.set(rq_hash, _cache)
-                elapsed = time.time() - start
-                LOG.info(
-                    f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
-                )
-                send_header(200, _cache)
-        except:
-            _cache['status'] = 'FAILED'
+        if total >= expected_size:
+            _cache.update({'status': 'COMPLETED'})
             cache.set(rq_hash, _cache)
-            send_header(500, _cache)
+            elapsed = time.time() - start
+            LOG.info(
+                f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
+            )
+            send_header(200, _cache)
+        # except:
+        #     _cache['status'] = 'FAILED'
+        #     cache.set(rq_hash, _cache)
+        #     send_header(500, _cache)
 
 
     def do_GET(self):
