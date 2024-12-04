@@ -257,7 +257,8 @@ class RemoteMarsClientSession:
                 res = json.loads(r.headers['X-DATA'])
             except:
                 print(r.headers)
-            # print(res)
+            if not res:
+                return Result(error=error, retry_same_host=True, retry_next_host=True, message='No result presented')
             try:
                 details = os.stat(res['target'])
                 while details.st_size < res['size'] and res['status'] in ('QUEUED', 'RUNNING', ):
