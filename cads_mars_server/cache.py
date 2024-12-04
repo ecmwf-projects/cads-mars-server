@@ -49,6 +49,7 @@ class CacheMaintainer:
         files_to_delete = []
         for folder in self.cache_folders:
             files_to_delete += glob.glob(os.path.join(folder, '*.grib'))
+        print(f'We found {len(files_to_delete)} files to be checked')
         self.hashes = {os.path.basename(f).split('.')[0]: f for f in files_to_delete}
         for hash in self.hashes:
             rq = self.cache.get(hash)

@@ -251,13 +251,13 @@ class RemoteMarsClientSession:
         # res = r.headers['X-DATA']
         # print('xxxx', res)
         # res = json.loads(res)
-
+        res = None
         if code == http.HTTPStatus.OK:
             try:
                 res = json.loads(r.headers['X-DATA'])
             except:
                 print(r.headers)
-            print(res)
+            # print(res)
             try:
                 details = os.stat(res['target'])
                 while details.st_size < res['size'] and res['status'] in ('QUEUED', 'RUNNING', ):
