@@ -49,7 +49,25 @@ NUMB = r"[\-\.]*[0-9]+[\.0-9]*[Ee]*[\-\+]*[0-9]*"
 
 def extract_transfer_bytes(file_path):
     # Define the regular expression pattern
+    # value reported by marsclient is not the exact file size
     pattern = re.compile(r"Transfering (\d+) bytes")
+
+    # Read the file
+    with open(file_path, 'r') as file:
+        for line in file:
+            # Search for the pattern in each line
+            match = pattern.search(line)
+            if match:
+                # Extract and return the number of bytes
+                return int(match.group(1))
+
+    # Return None if no match is found
+    return None
+
+def find_if_request_finished(file_path):
+    # Define the regular expression pattern
+    # value reported by marsclient is not the exact file size
+    pattern = re.compile(r"No errrors reported")
 
     # Read the file
     with open(file_path, 'r') as file:
@@ -543,7 +561,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
             _cache.update({'pid': pid})
             cache.set(rq_hash, _cache)
-            self.wfile.write('Request submitted to mars\n')
+            # self.send_response(200)
+            #self.wfile.write(b'Request submitted to mars')
 
         wayting = True
 
@@ -572,6 +591,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         if total >= expected_size:
             _cache.update({'status': 'COMPLETED'})
+            _cache.update({'size': os.stat(request['target']).st_size})
             cache.set(rq_hash, _cache)
             elapsed = time.time() - start
             LOG.info(

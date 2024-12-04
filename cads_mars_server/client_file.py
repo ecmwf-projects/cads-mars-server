@@ -69,6 +69,7 @@ class RemoteMarsClientSession:
         except requests.exceptions.ConnectionError as e:
             self.log.error(f"Connection error {e}")
             return Result(error=e, retry_next_host=True)
+        
 
         try:
             r.raise_for_status()
