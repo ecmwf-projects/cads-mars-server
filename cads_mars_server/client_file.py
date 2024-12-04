@@ -260,9 +260,16 @@ class RemoteMarsClientSession:
             if not res:
                 return Result(error=error, retry_same_host=True, retry_next_host=True, message='No result presented')
             try:
-                details = os.stat(res['target'])
-                while details.st_size < res['size'] and res['status'] in ('QUEUED', 'RUNNING', ):
-                    time.sleep(.5)
+                if 'target' in res:
+                    details = os.stat(res['target'])
+                    while details.st_size < res['size'] and res['status'] in ('QUEUED', 'RUNNING', ):
+                        time.sleep(.5)
+                else:
+                    return Result(
+                        error=e,
+                        retry_same_host=True,
+                        retry_next_host=True
+                    )
             except ClientError as e:
                 self.log.exception("Error transferring file (ClientError)")
                 return Result(
