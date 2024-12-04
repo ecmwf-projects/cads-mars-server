@@ -261,6 +261,7 @@ class RemoteMarsClientSession:
                 return Result(error=error, retry_same_host=True, retry_next_host=True, message='No result presented')
             try:
                 if 'target' in res:
+                    res['target'] = res['target'].replace(CACHE_ROOT, '')
                     if os.path.exists(res['target']):
                         details = os.stat(res['target'])
                     else:
