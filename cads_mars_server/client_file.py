@@ -261,7 +261,10 @@ class RemoteMarsClientSession:
                 return Result(error=error, retry_same_host=True, retry_next_host=True, message='No result presented')
             try:
                 if 'target' in res:
-                    details = os.stat(res['target'])
+                    if os.path.exists(res['target']):
+                        details = os.stat(res['target'])
+                    else:
+                        details = os.stat(res['target'].replace(CACHE_ROOT, ''))
                     while details.st_size < res['size'] and res['status'] in ('QUEUED', 'RUNNING', ):
                         time.sleep(.5)
                 else:
