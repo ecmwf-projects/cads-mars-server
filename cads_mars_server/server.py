@@ -552,6 +552,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         request.update({'target': _cache['target']})
         if 'size' not in _cache:
+            environ.update({'MARS_AUTO_SPLIT_BY_DATES': 1})
             fd, pid = mars_target(
                 mars_executable=self.mars_executable,
                 request=request,
