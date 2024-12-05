@@ -53,13 +53,14 @@ def extract_transfer_bytes(file_path):
     pattern = re.compile(r"Transfering (\d+) bytes")
 
     # Read the file
-    with open(file_path, 'r') as file:
-        for line in file:
-            # Search for the pattern in each line
-            match = pattern.search(line)
-            if match:
-                # Extract and return the number of bytes
-                return int(match.group(1))
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as file:
+            for line in file:
+                # Search for the pattern in each line
+                match = pattern.search(line)
+                if match:
+                    # Extract and return the number of bytes
+                    return int(match.group(1))
 
     # Return None if no match is found
     return None
