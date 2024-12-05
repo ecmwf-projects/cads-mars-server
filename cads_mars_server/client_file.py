@@ -117,21 +117,9 @@ class RemoteMarsClientSession:
                 self.log.error(f"MARS client exited with code {exitcode}")
 
         if code == http.HTTPStatus.OK:
-            try:
-                self._transfer(r)
-            except ClientError as e:
-                self.log.exception("Error transferring file (ClientError)")
-                return Result(
-                    error=e,
-                    retry_same_host=e.retry_same_host,
-                    retry_next_host=e.retry_next_host,
-                )
-            except urllib3.exceptions.ProtocolError as e:
-                self.log.exception("Error transferring file (ProtocolError)")
-                return Result(error=e, retry_same_host=True, retry_next_host=True)
-            except Exception as e:
-                self.log.exception("Error transferring file (Other errors)")
-                error = e
+            self.log.exception("Error transferring file (ClientError)")
+            time.sleep(1)
+            return self.execute()
 
         logfile = None
 
