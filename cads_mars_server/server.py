@@ -513,16 +513,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if _cache:
             if _cache['status'] in ['RUNNING', 'QUEUED']:
                 LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
-                with open(log_file, 'w') as _f:
-                    _f.write('Waiting and serving file from cads_mars_server cache')
-                    send_header(200, _cache)
+                if not os.path.exists(log_file):
+                    with open(log_file, 'w') as _f:
+                        _f.write('Waiting and serving file from cads_mars_server cache')
+                        send_header(200, _cache)
                     return
             elif _cache['status'] == 'COMPLETED':
                 out_file = _cache['target']
                 LOG.info(f'Cached request {rq_hash} for request {uid}')
                 if os.path.exists(out_file):
-                    with open(log_file, 'w') as _f:
-                        _f.write('File returned from cads_mars_server cache')
+                    if not os.path.exists(log_file):
+                        with open(log_file, 'w') as _f:
+                            _f.write('File returned from cads_mars_server cache')
                     send_header(200, _cache)
                     return
             elif _cache['status'] == 'FAILED':

@@ -46,8 +46,6 @@ class RemoteMarsClientSession:
         self.open_mode = open_mode
         self.position = position
 
-    
-
     def execute(self):
         self.log.info(f"Calling {self.url} {self.request} {self.environ}")
 
