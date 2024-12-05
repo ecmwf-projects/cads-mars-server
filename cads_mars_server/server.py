@@ -579,7 +579,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 cache.set(rq_hash, _cache)
                 break
             if time.time() - t0 > 40:
-                wayting = False
+                send_header(200, _cache, retry_same_host=True, retry_next_host=False)
             time.sleep(.004)
         total = 0
         t0 = time.time()
