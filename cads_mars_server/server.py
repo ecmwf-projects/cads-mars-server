@@ -493,11 +493,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.send_header("X-MARS-RETRY-SAME-HOST", int(result['status'] == 'QUEUED' or retry_same_host is not None))
                 if retry_next_host is not None:
                     self.send_header("X-MARS-RETRY-NEXT-HOST", int(retry_next_host))
-                if result['status'] in ['RUNNING', 'COMPLETED'] :
-                    if result['size'] == os.stat(result['target']).st_size:
-                        result['status'] = 'COMPLETED'
-                        result['access'] += 1
-                        cache.set(rq_hash, result)
+                if result['status'] in ['QUEUED', 'RUNNING', 'COMPLETED'] :
+                    if os.path.exists(result['target']):
+                        if result['size'] >= os.stat(result['target']).st_size:
+                            result['status'] = 'COMPLETED'
+                            result['access'] += 1
+                    cache.set(rq_hash, result)
                 elif result['status'] == 'FAILED':
                     if os.path.exists(result['target']):
                         os.unlink(result['target'])
