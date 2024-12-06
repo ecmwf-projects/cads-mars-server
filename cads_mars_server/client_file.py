@@ -119,7 +119,26 @@ class RemoteMarsClientSession:
         if code == http.HTTPStatus.OK:
             self.log.info(f"{r.headers}")
             time.sleep(1)
-            return self.execute()
+            if 'X-DATA' in r.headers:
+                data = json.loads(r.headers['X-DATA'])
+                if 'target' in data:
+                    data['target'] = data['target'].replace(CACHE_ROOT, '')
+                    if os.path.exists(data['target']):
+                        details = os.stat(data['target'])
+                    else:
+                        details = os.stat(data['target'].replace(CACHE_ROOT, ''))
+                    while details.st_size < data['size'] and data['status'] in ('QUEUED', 'RUNNING', ):
+                        time.sleep(.5)
+                    
+                    return Result(
+                        error=error,
+                        message=r.text or str(error),
+                        retry_same_host=retry_same_host,
+                        retry_next_host=retry_next_host or retry_same_host,
+                        data=data
+                    )
+            else:
+                return self.execute()
 
         logfile = None
 
