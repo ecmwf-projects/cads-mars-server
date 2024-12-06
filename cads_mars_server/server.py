@@ -530,16 +530,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     send_header(200, _cache)
                     return
             elif _cache['status'] == 'FAILED':
-                out_file = _cache['target']
-                _cache = dict(
-                    status='QUEUED',
-                    host=os.uname().nodename,
-                    mars=MARS_CACHE_FOLDER,
-                    share=out_file.split('/')[1],
-                    target=out_file,
-                    access=0
-                )
-                run = True
+                LOG.info(f'Cached request {rq_hash} for request {uid} failed')
+                cache.delete(rq_hash)
+                if _cache['target']:
+                    os.unlink(_cache['target'])
+                return self._file(request, environ, uid)
+                
         else:
             out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], MARS_CACHE_FOLDER, f'{rq_hash}.grib')
             _cache = dict(
@@ -552,61 +548,61 @@ class Handler(http.server.BaseHTTPRequestHandler):
             )
             run = True
             cache.set(rq_hash, _cache)
-        start = time.time()
+            start = time.time()
 
-        request.update({'target': _cache['target']})
-        if 'size' not in _cache:
-            environ.update({'MARS_AUTO_SPLIT_BY_DATES': 1})
-            fd, pid = mars_target(
-                mars_executable=self.mars_executable,
-                request=request,
-                uid=uid,
-                logdir=self.logdir,
-                environ=environ,
-            )
-            _cache.update({'pid': pid})
-            cache.set(rq_hash, _cache)
-            # self.send_response(200)
-            #self.wfile.write(b'Request submitted to mars')
-
-        wayting = True
-
-        t0 = time.time()
-        while wayting and run:
-            expected_size = extract_transfer_bytes(log_file)
-            if expected_size:
-                wayting = False
-                _cache.update({'size': expected_size, 'status': 'RUNNING', 'access': _cache.get('access', 0) + 1})
+            request.update({'target': _cache['target']})
+            if 'size' not in _cache:
+                environ.update({'MARS_AUTO_SPLIT_BY_DATES': 1})
+                fd, pid = mars_target(
+                    mars_executable=self.mars_executable,
+                    request=request,
+                    uid=uid,
+                    logdir=self.logdir,
+                    environ=environ,
+                )
+                _cache.update({'pid': pid})
                 cache.set(rq_hash, _cache)
-                break
-            if time.time() - t0 > 40:
-                send_header(200, _cache, retry_same_host=True, retry_next_host=False)
-            time.sleep(.004)
-        total = 0
-        t0 = time.time()
-        # try:
-        if total < expected_size:
-            while True:
-                if os.path.exists(request['target']):
-                    total = os.stat(request['target']).st_size
-                    LOG.info(f'{total / expected_size * 100:0.2f}% of {expected_size}')
-                    if total >= expected_size:
-                        break
-                time.sleep(.1)
+                # self.send_response(200)
+                #self.wfile.write(b'Request submitted to mars')
 
-        if total >= expected_size:
-            _cache.update({'status': 'COMPLETED'})
-            _cache.update({'size': os.stat(request['target']).st_size})
-            cache.set(rq_hash, _cache)
-            elapsed = time.time() - start
-            LOG.info(
-                f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
-            )
-            send_header(200, _cache)
-        # except:
-        #     _cache['status'] = 'FAILED'
-        #     cache.set(rq_hash, _cache)
-        #     send_header(500, _cache)
+            wayting = True
+
+            t0 = time.time()
+            while wayting and run:
+                expected_size = extract_transfer_bytes(log_file)
+                if expected_size:
+                    wayting = False
+                    _cache.update({'size': expected_size, 'status': 'RUNNING', 'access': _cache.get('access', 0) + 1})
+                    cache.set(rq_hash, _cache)
+                    break
+                if time.time() - t0 > 40:
+                    send_header(200, _cache, retry_same_host=True, retry_next_host=False)
+                time.sleep(.004)
+            total = 0
+            t0 = time.time()
+            # try:
+            if total < expected_size:
+                while True:
+                    if os.path.exists(request['target']):
+                        total = os.stat(request['target']).st_size
+                        LOG.info(f'{total / expected_size * 100:0.2f}% of {expected_size}')
+                        if total >= expected_size:
+                            break
+                    time.sleep(.1)
+
+            if total >= expected_size:
+                _cache.update({'status': 'COMPLETED'})
+                _cache.update({'size': os.stat(request['target']).st_size})
+                cache.set(rq_hash, _cache)
+                elapsed = time.time() - start
+                LOG.info(
+                    f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
+                )
+                send_header(200, _cache)
+            # except:
+            #     _cache['status'] = 'FAILED'
+            #     cache.set(rq_hash, _cache)
+            #     send_header(500, _cache)
 
 
     def do_GET(self):
