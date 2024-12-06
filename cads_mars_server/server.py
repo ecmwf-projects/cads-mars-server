@@ -495,7 +495,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.send_header("X-MARS-RETRY-NEXT-HOST", int(retry_next_host))
                 if result['status'] in ['QUEUED', 'RUNNING', 'COMPLETED'] :
                     if os.path.exists(result['target']):
-                        if result['size'] >= os.stat(result['target']).st_size:
+                        if result['size'] <= os.stat(result['target']).st_size:
                             result['status'] = 'COMPLETED'
                             result['access'] += 1
                     cache.set(rq_hash, result)
