@@ -307,7 +307,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         request = data["request"]
         environ = data["environ"]
-        type = data.get("type", "file")
+        type = data.get("type", "queue")
 
         LOG.info("POST %s %s", request, environ)
 
