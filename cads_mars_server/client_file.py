@@ -58,6 +58,7 @@ class RemoteMarsClientSession:
                 json=dict(
                     request=self.request,
                     environ=self.environ,
+                    type='file'
                 ),
                 stream=True,
             )
@@ -138,6 +139,7 @@ class RemoteMarsClientSession:
                         data=data
                     )
             else:
+                self.log.info(f"We got code {code} from server {self.url} resubmitting request")
                 return self.execute()
 
         logfile = None
