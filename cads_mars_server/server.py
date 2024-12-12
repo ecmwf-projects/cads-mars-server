@@ -513,6 +513,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         _cache = cache.get(rq_hash)
         run = _cache is not None
         if _cache:
+            LOG.info(f'Cache found for request {uid}')
             if _cache['status'] in ['RUNNING', 'QUEUED']:
                 LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
                 if not os.path.exists(log_file):
@@ -524,11 +525,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 out_file = _cache['target']
                 LOG.info(f'Cached request {rq_hash} for request {uid}')
                 if os.path.exists(out_file):
+                    LOG.info(f'Cached file {out_file} not found')
                     if not os.path.exists(log_file):
                         with open(log_file, 'w') as _f:
                             _f.write('File returned from cads_mars_server cache')
                     send_header(200, _cache)
                     return
+                else:
+                    LOG.info(f'Cached file not found at {out_file} resubmitting request')
+                    cache.delete(rq_hash)
+                    return self._file(request, environ, uid)
             elif _cache['status'] == 'FAILED':
                 LOG.info(f'Cached request {rq_hash} for request {uid} failed')
                 cache.delete(rq_hash)
@@ -562,8 +568,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 )
                 _cache.update({'pid': pid})
                 cache.set(rq_hash, _cache)
-                # self.send_response(200)
-                #self.wfile.write(b'Request submitted to mars')
 
             wayting = True
 
