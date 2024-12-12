@@ -13,10 +13,9 @@ from urllib3.connectionpool import HTTPConnectionPool
 
 from .tools import bytes
 from .client_pipe import ConnectionWithKeepAlive, Result, ClientError
+from .cache import WorkerCache, get_config
 
 LOG = logging.getLogger(__name__)
-
-CACHE_ROOT = '/cache'
 
 
 HTTPConnectionPool.ConnectionCls = ConnectionWithKeepAlive
@@ -168,6 +167,7 @@ class RemoteMarsClientSession:
             pass
 
 class RemoteMarsClientSession:
+    config = get_config()
     def __init__(
         self,
         *,
@@ -253,11 +253,6 @@ class RemoteMarsClientSession:
             if "X-MARS-EXIT-CODE" in r.headers:
                 exitcode = int(r.headers["X-MARS-EXIT-CODE"])
                 self.log.error(f"MARS client exited with code {exitcode}")
-        # print(r.headers)
-        # assert r.headers['X-DATA'], f'No result presented'
-        # res = r.headers['X-DATA']
-        # print('xxxx', res)
-        # res = json.loads(res)
         res = None
         if code == http.HTTPStatus.OK:
             try:
@@ -268,12 +263,12 @@ class RemoteMarsClientSession:
                 return Result(error=error, retry_same_host=True, retry_next_host=True, message='No result presented')
             try:
                 if 'target' in res:
-                    res['target'] = res['target'].replace(CACHE_ROOT, '')
-                    if os.path.exists(res['target']):
-                        details = os.stat(res['target'])
-                    else:
-                        details = os.stat(res['target'].replace(CACHE_ROOT, ''))
+                    target = self.local_target(res)
+                    if os.path.exists(target):
+                        details = os.stat(target)
                     while details.st_size < res['size'] and res['status'] in ('QUEUED', 'RUNNING', ):
+                        details = os.stat(target)
+                        res = json.loads(requests.get(self.url + "/" + uid).headers['X-DATA'])
                         time.sleep(.5)
                 else:
                     return Result(
@@ -320,6 +315,19 @@ class RemoteMarsClientSession:
                 requests.delete(self.url + "/" + self.uid)
         except Exception:
             pass
+    
+    def local_target(self, cache_object: dict) -> str:
+        if cache_object.get('target'):
+            target = cache_object['target']
+            _, _file = tuple(target.split('/mars/'))
+            _cache_root, share = _.split('/')[1:]
+            print(_cache_root, share)
+            _c = get_config()
+            # assert _c['CACHE_ROOT'] == _cache_root
+            return target.replace(f'/{_cache_root}', f"{_c['CACHE_ROOT']}")
+         #/cache/download-dev-0001/mars/7882c915598e3ae467262a6a8d17792f.grib
+
+
 
 class RemoteMarsClient:
     def __init__(
@@ -490,3 +498,4 @@ class MarsAdaptor:
     ) -> None:
         self.request = request
         self.env = env
+   
