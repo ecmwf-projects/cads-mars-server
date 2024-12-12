@@ -540,7 +540,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], MARS_CACHE_FOLDER, f'{rq_hash}.grib')
             _cache = dict(
                 status='QUEUED',
-                host=os.uname().nodename,
+                host=os.uname().nodename.split('.')[0],
                 mars=MARS_CACHE_FOLDER,
                 share=out_file.split('/')[1],
                 target=out_file,
