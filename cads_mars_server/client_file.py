@@ -124,7 +124,7 @@ class RemoteMarsClientSession:
                 data = json.loads(r.headers['X-DATA'])
                 if 'target' in data:
                     target = local_target(data['target'])
-                    while os.path.exists(target):
+                    while not os.path.exists(target):
                         time.sleep(.5)
                     while os.stat(target).st_size < data['size'] and data['status'] in ('QUEUED', 'RUNNING', ):
                         time.sleep(.5)
