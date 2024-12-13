@@ -13,7 +13,8 @@ from urllib3.connectionpool import HTTPConnectionPool
 
 from .tools import bytes
 from .client_pipe import ConnectionWithKeepAlive, Result, ClientError
-from .cache import WorkerCache, get_config
+from .cache import WorkerCache
+from .config import get_config, local_target
 
 LOG = logging.getLogger(__name__)
 
@@ -263,7 +264,7 @@ class RemoteMarsClientSession:
                 return Result(error=error, retry_same_host=True, retry_next_host=True, message='No result presented')
             try:
                 if 'target' in res:
-                    target = self.local_target(res)
+                    target = local_target(res)
                     while res['status'] in ('QUEUED', 'RUNNING', ):
                         time.sleep(.5)
                         return self.execute()
