@@ -284,12 +284,6 @@ class RemoteMarsClientSession:
                             retry_next_host=True,
                             data=res
                         )
-                else:
-                    return Result(
-                        error=e,
-                        retry_same_host=True,
-                        retry_next_host=True
-                    )
             except ClientError as e:
                 self.log.exception("Error transferring file (ClientError)")
                 return Result(
