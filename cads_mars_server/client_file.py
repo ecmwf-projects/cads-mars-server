@@ -272,7 +272,12 @@ class RemoteMarsClientSession:
                         assert os.path.exists(target), f'File not found in the destiantion {target}'
                         details = os.stat(target)
                         res = json.loads(requests.get(self.url + "/" + uid).headers['X-DATA'])
-                        time.sleep(.5)
+                        return Result(
+                            error=None,
+                            retry_same_host=True,
+                            retry_next_host=True,
+                            data=res
+                        )
                     elif res['status'] == 'FAILED':
                         return Result(
                             error=res['message'],
