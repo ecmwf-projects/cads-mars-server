@@ -11,7 +11,7 @@ import time
 import uuid
 import hashlib
 import random
-from .config import get_config
+from .config import get_config, local_target
 from pymemcache.client.hash import HashClient
 import setproctitle
 import subprocess

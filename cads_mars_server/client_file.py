@@ -330,15 +330,7 @@ class RemoteMarsClientSession:
         except Exception:
             pass
     
-    def local_target(self, cache_object: dict) -> str:
-        if cache_object.get('target'):
-            target = cache_object['target']
-            _, _file = tuple(target.split('/mars/'))
-            _cache_root, share = _.split('/')[1:]
-            print(_cache_root, share)
-            _c = get_config()
-            # assert _c['CACHE_ROOT'] == _cache_root
-            return target.replace(f'/{_cache_root}', f"{_c['CACHE_ROOT']}")
+
          #/cache/download-dev-0001/mars/7882c915598e3ae467262a6a8d17792f.grib
 
 
