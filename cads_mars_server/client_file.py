@@ -269,19 +269,18 @@ class RemoteMarsClientSession:
                         return self.execute()
                     
                     if res['status'] == 'COMPLETED':
-                        assert os.path.exists(target), f'File not found in the destiantion {target}'
-                        details = os.stat(target)
-                        res = json.loads(requests.get(self.url + "/" + uid).headers['X-DATA'])
+                        assert os.path.exists(target), f'File not found in the destination {target}'
+                        # res = json.loads(requests.get(self.url + "/" + uid).headers['X-DATA'])
                         return Result(
                             error=None,
                             retry_same_host=True,
                             retry_next_host=True,
-                            data=res
+                            data=res,
                         )
                     elif res['status'] == 'FAILED':
                         return Result(
                             error=res['message'],
-                            retry_same_host=True,
+                            retry_same_host=False,
                             retry_next_host=True,
                             data=res
                         )
