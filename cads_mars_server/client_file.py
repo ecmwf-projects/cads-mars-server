@@ -264,12 +264,22 @@ class RemoteMarsClientSession:
             try:
                 if 'target' in res:
                     target = self.local_target(res)
-                    if os.path.exists(target):
-                        details = os.stat(target)
-                    while details.st_size < res['size'] and res['status'] in ('QUEUED', 'RUNNING', ):
+                    while res['status'] in ('QUEUED', 'RUNNING', ):
+                        time.sleep(.5)
+                        return self.execute()
+                    
+                    if res['status'] == 'COMPLETED':
+                        assert os.path.exists(target), f'File not found in the destiantion {target}'
                         details = os.stat(target)
                         res = json.loads(requests.get(self.url + "/" + uid).headers['X-DATA'])
                         time.sleep(.5)
+                    elif res['status'] == 'FAILED':
+                        return Result(
+                            error=res['message'],
+                            retry_same_host=True,
+                            retry_next_host=True,
+                            data=res
+                        )
                 else:
                     return Result(
                         error=e,
