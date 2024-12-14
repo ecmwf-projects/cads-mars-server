@@ -461,10 +461,10 @@ class RemoteMarsClientCluster:
     def _execute(self, request, environ):
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
-        # request_id = environ.get("request_id", "unknown")
+        request_id = environ.get("request_id", "unknown")
         try:
             for url in self.urls:
-                # setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
+                setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
 
                 client = RemoteMarsClient(
                     url=url,
