@@ -2,7 +2,7 @@ import yaml
 import os
 
 DEFAULT_CONFIG_FILE = '/etc/cads-mars-server.yaml'
-
+MARS_CONFIG_FILE = os.getenv('MARS_CONFIG_FILE', DEFAULT_CONFIG_FILE)
 DEFAULT_CONFIG = dict(
     CACHE_ROOT='/cache',
     SHARES=['download-dev-0001', 'download-dev-0002'],
@@ -11,8 +11,8 @@ DEFAULT_CONFIG = dict(
 )
 
 def get_config():
-    if os.path.exists(DEFAULT_CONFIG_FILE):
-        with open(DEFAULT_CONFIG_FILE, 'r') as _f:
+    if os.path.exists(MARS_CONFIG_FILE):
+        with open(MARS_CONFIG_FILE, 'r') as _f:
             config = yaml.safe_load(_f)
     else:
         config = DEFAULT_CONFIG
