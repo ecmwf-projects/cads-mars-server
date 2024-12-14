@@ -494,14 +494,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if retry_next_host is not None:
                     self.send_header("X-MARS-RETRY-NEXT-HOST", int(retry_next_host))
                 if result['status'] in ['QUEUED', 'RUNNING', 'COMPLETED'] :
-                    if os.path.exists(result['target']):
-                        if result['size'] <= os.stat(result['target']).st_size:
+                    target = local_target(result)
+                    if os.path.exists(target):
+                        if result['size'] <= os.stat(target).st_size:
                             result['status'] = 'COMPLETED'
                             result['access'] += 1
                     cache.set(rq_hash, result)
                 elif result['status'] == 'FAILED':
-                    if os.path.exists(result['target']):
-                        os.unlink(result['target'])
+                    if os.path.exists(local_target(result)):
+                        os.unlink(local_target(result))
                     cache.delete(rq_hash)
                 self.send_header("X-DATA", json.dumps(result))
                 self.end_headers()
@@ -509,7 +510,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     json.dumps(result).encode('utf-8')
                 )
                 signal.alarm(0)
-
         _cache = cache.get(rq_hash)
         run = _cache is not None
         if _cache:
