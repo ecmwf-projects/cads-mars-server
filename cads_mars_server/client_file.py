@@ -130,7 +130,7 @@ class RemoteMarsClientSession:
                         time.sleep(.5)
                     return Result(
                         error=None,
-                        message=f'File downloaded from cache retrieved on {data['share']} by {data['host']}',
+                        message=f"File from cache found on {data['share']} by {data['host']}",
                         retry_same_host=retry_same_host,
                         retry_next_host=retry_next_host or retry_same_host,
                         data=data
