@@ -123,7 +123,9 @@ class RemoteMarsClientSession:
             if 'X-DATA' in r.headers:
                 data = json.loads(r.headers['X-DATA'])
                 if 'target' in data:
+                    # Client returns the target file path in local coordinates
                     target = local_target(data['target'])
+                    data['target'] = target
                     while not os.path.exists(target):
                         time.sleep(.5)
                     while os.stat(target).st_size < data['size'] and data['status'] in ('QUEUED', 'RUNNING', ):
