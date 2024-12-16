@@ -519,6 +519,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if _cache['target']:
                         if os.path.exists(_cache['target']):
                             os.unlink(_cache['target'])
+                    cache.delete(rq_hash)
                     return self._file(request, environ, uid)
 
                 if not os.path.exists(log_file):
