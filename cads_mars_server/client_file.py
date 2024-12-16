@@ -281,6 +281,7 @@ class RemoteMarsClientSession:
                     elif res['status'] == 'FAILED':
                         return Result(
                             error=res['message'],
+                            message=requests.get(self.url + "/" + uid).text,
                             retry_same_host=False,
                             retry_next_host=True,
                             data=res
