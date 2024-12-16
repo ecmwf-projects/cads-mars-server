@@ -275,7 +275,7 @@ class RemoteMarsClientSession:
                             error=None,
                             retry_same_host=True,
                             retry_next_host=True,
-                            message=requests.get(self.url + "/" + uid).json(),
+                            message=requests.get(self.url + "/" + uid).text,
                             data=res,
                         )
                     elif res['status'] == 'FAILED':
@@ -324,10 +324,6 @@ class RemoteMarsClientSession:
                 requests.delete(self.url + "/" + self.uid)
         except Exception:
             pass
-    
-
-         #/cache/download-dev-0001/mars/7882c915598e3ae467262a6a8d17792f.grib
-
 
 
 class RemoteMarsClient:
