@@ -40,9 +40,9 @@ class CacheMaintainer:
         self.cache = cache
         self.config = get_config()
         self.cache_root = self.config['CACHE_ROOT']
-        self.mars_cache_folder = self.config['MARS_CACHE_FOLDER']
+        self.cache_folder = self.config['CACHE_FOLDER']
         self.shares = self.config['SHARES']
-        self.cache_folders = [os.path.join(self.cache_root, share, self.mars_cache_folder) for share in self.shares]
+        self.cache_folders = [os.path.join(self.cache_root, share, self.cache_folder) for share in self.shares]
 
     def clean(self):
         # clean all files that are not tracked by the WorkerCache

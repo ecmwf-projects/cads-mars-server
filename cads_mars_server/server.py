@@ -34,7 +34,7 @@ CACHE_ROOT = config['CACHE_ROOT']
 
 SHARES = config['SHARES']
 
-MARS_CACHE_FOLDER = config['MARS_CACHE_FOLDER']
+CACHE_FOLDER = config['CACHE_FOLDER']
 MEMCACHED = config['MEMCACHED']
 
 
@@ -294,11 +294,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     mars_executable = "/usr/local/bin/mars"
     wbufsize = 1024 * 1024
     disable_nagle_algorithm = True
-    client_type = dict(
-        pipe=mars,
-        file=mars_target,
-    )
-
+    
     def do_POST(self):
         signal.signal(signal.SIGALRM, timeout_handler)
 
@@ -307,7 +303,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         request = data["request"]
         environ = data["environ"]
-        type = data.get("type", "queue")
+        type = data.get("type", "pipe")
 
         LOG.info("POST %s %s", request, environ)
 
@@ -543,11 +539,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._file(request, environ, uid)
                 
         else:
-            out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], MARS_CACHE_FOLDER, f'{rq_hash}.grib')
+            out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], CACHE_FOLDER, f'{rq_hash}.grib')
             _cache = dict(
                 status='QUEUED',
                 host=os.uname().nodename.split('.')[0],
-                mars=MARS_CACHE_FOLDER,
+                mars=CACHE_FOLDER,
                 share=out_file.split('/')[1],
                 target=out_file,
                 access=0
@@ -603,10 +599,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
                 )
                 send_header(200, _cache)
-            # except:
-            #     _cache['status'] = 'FAILED'
-            #     cache.set(rq_hash, _cache)
-            #     send_header(500, _cache)
 
 
     def do_GET(self):

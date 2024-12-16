@@ -145,7 +145,7 @@ class RemoteMarsClientSession:
                 json=dict(
                     request=self.request,
                     environ=self.environ,
-                    type='queue'
+                    type='pipe'
                 ),
                 stream=True,
             )
