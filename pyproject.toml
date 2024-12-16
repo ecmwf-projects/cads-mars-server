@@ -17,7 +17,8 @@ dependencies = [
   "click",
   "requests",
   "setproctitle",
-  "pymemcache"
+  "pymemcache",
+  "psutils"
 ]
 description = "A proxy MARS server and client designed for CADS"
 dynamic = ["version"]

@@ -2,7 +2,7 @@ import http.server
 import json
 import logging
 import os
-import psutil
+import psutils
 import re
 import select
 import signal
@@ -514,7 +514,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if _cache['status'] in ['RUNNING', 'QUEUED']:
                 LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
                 if _cache['host'] == os.uname().nodename.split('.')[0]:
-                    assert psutil.pid_exists(_cache['pid']), f'Process for mars.bin expected with pid {_cache["pid"]}, but not found'
+                    assert psutils.pid_exists(_cache['pid']), f'Process for mars.bin expected with pid {_cache["pid"]}, but not found'
                     cache.delete(rq_hash)
                     if _cache['target']:
                         if os.path.exists(_cache['target']):
