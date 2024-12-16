@@ -522,12 +522,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         if _cache['target']:
                             if os.path.exists(_cache['target']):
                                 os.unlink(_cache['target'])
-                        raise e
+                        send_header(500, _cache, retry_next_host=True, exited=1)    
                 if not os.path.exists(log_file):
                     with open(log_file, 'w') as _f:
                         _f.write('Waiting and serving file from cads_mars_server cache')
                         send_header(200, _cache)
                     return
+                send_header(200, _cache)
             elif _cache['status'] == 'COMPLETED':
                 out_file = _cache['target']
                 LOG.info(f'Cached request {rq_hash} for request {uid}')
