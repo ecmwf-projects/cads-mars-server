@@ -2,6 +2,7 @@ import http.server
 import json
 import logging
 import os
+import psutil
 import re
 import select
 import signal
@@ -512,6 +513,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             LOG.info(f'Cache found for request {uid}')
             if _cache['status'] in ['RUNNING', 'QUEUED']:
                 LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
+                if _cache['host'] == os.uname().nodename.split('.')[0]:
+                    assert psutil.pid_exists(_cache['pid']), f'Process for mars.bin expected with pid {_cache["pid"]}, but not found'
+                    cache.delete(rq_hash)
+                    if _cache['target']:
+                        if os.path.exists(_cache['target']):
+                            os.unlink(_cache['target'])
+                    return self._file(request, environ, uid)
+
                 if not os.path.exists(log_file):
                     with open(log_file, 'w') as _f:
                         _f.write('Waiting and serving file from cads_mars_server cache')
