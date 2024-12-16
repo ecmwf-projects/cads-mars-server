@@ -2,7 +2,7 @@ import http.server
 import json
 import logging
 import os
-import psutils
+import psutil
 import re
 import select
 import signal
