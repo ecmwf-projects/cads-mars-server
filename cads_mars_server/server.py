@@ -465,7 +465,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         cache = WorkerCache(HashClient(MEMCACHED))
         rq_hash = request_hash(request)
         log_file = os.path.join(self.logdir, f"{uid}.log")
-
+        LOG.info(f'File request for {rq_hash} with uid {uid}')
         def send_header(
                 code,
                 result,
