@@ -175,57 +175,6 @@ def mars(*, mars_executable, request, uid, logdir, environ):
 
     os.execlpe(mars_executable, mars_executable, env)
 
-def mars_file(*, mars_executable, request, uid, logdir, environ):
-    request_pipe_r, request_pipe_w = os.pipe()
-    
-    pid = os.fork()
-
-    if pid:
-        if isinstance(request, dict):
-            requests = [request]
-        else:
-            requests = request
-
-        assert isinstance(requests, list)
-
-
-        def out(text):
-            text = text.encode()
-            assert os.write(request_pipe_w, text) == len(text)
-
-        for request in requests:
-            out("RETRIEVE,\n")
-            
-            for key, value in request.items():
-                if key != 'target':
-                    out("{0}={1},\n".format(key, tidy(value)))
-            out("{0}={1}\n".format('target', tidy(request['target'])))
-            
-            os.close(request_pipe_r)
-            os.close(request_pipe_w)
-
-            return request_pipe_w, pid
-
-    os.dup2(request_pipe_r, 0)
-    os.close(request_pipe_w)
-    out = os.open(
-        os.path.join(logdir, f"{uid}.log"),
-        os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-        0o644,
-    )
-    os.dup2(out, 1)
-    os.dup2(out, 2)
-
-    env = dict(os.environ)
-
-    for k, v in environ.items():
-        if v is not None:
-            env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
-
-    env.setdefault("MARS_ENVIRON_REQUEST_ID", uid)
-    LOG.info(f'{request_pipe_w} : is it a request?')
-
-    os.execlpe(mars_executable, mars_executable, env)
 
 def mars_target(*, mars_executable, request, uid, logdir, environ):
     request_pipe_r, request_pipe_w = os.pipe()

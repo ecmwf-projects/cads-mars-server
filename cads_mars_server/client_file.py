@@ -275,7 +275,7 @@ class RemoteMarsClientSession:
                             error=None,
                             retry_same_host=True,
                             retry_next_host=True,
-                            message=json.loads(requests.get(self.url + "/" + uid).headers['X-DATA']),
+                            message=requests.get(self.url + "/" + uid).json(),
                             data=res,
                         )
                     elif res['status'] == 'FAILED':
