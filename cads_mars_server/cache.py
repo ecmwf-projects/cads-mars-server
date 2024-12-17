@@ -4,6 +4,7 @@ import json
 from pymemcache.client.hash import HashClient
 import hashlib
 import os
+import random
 
 VALID_STATUS = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED']
 
@@ -34,6 +35,13 @@ class WorkerCache:
 
     def delete_all(self):
         return self.client.delete_all()
+    
+    def new_file(self, request):
+        rq_hash = request_hash(request)
+        share = random.choice(self.config['SHARES'])
+        out_file = os.path.join(self.config['CACHE_ROOT'], share, self.config['CACHE_FOLDER'], f'{rq_hash}.grib')
+        return out_file
+            
     
 class CacheMaintainer:
     def __init__(self, cache: WorkerCache):

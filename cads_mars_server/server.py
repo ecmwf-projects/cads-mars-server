@@ -505,7 +505,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 status='QUEUED',
                 host=os.uname().nodename.split('.')[0],
                 mars=CACHE_FOLDER,
-                share=out_file.split('/')[1],
+                share=out_file.split('/')[-3],
                 target=out_file,
                 access=0
             )
