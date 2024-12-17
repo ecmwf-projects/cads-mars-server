@@ -6,7 +6,7 @@ import hashlib
 import os
 import random
 
-VALID_STATUS = ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED']
+VALID_STATUS = ['ACCEPTED', 'RUNNING', 'SUCCESSFUL', 'FAILED', 'DELETED']
 
 
 def request_hash(request):
