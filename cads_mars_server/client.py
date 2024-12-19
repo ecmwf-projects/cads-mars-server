@@ -230,6 +230,7 @@ class RemoteMarsClientSession:
                             return self.execute()
 
                         if res["status"] == "COMPLETED":
+                            time.sleep(2)
                             assert os.path.exists(
                                 target
                             ), f"File not found in the destination {target}"
