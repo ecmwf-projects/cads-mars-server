@@ -2,7 +2,7 @@ import http.server
 import json
 import logging
 import os
-import psutil
+import random
 import re
 import select
 import signal
@@ -10,14 +10,13 @@ import socket
 import socketserver
 import time
 import uuid
-import hashlib
-import random
-from .config import get_config, local_target
-from pymemcache.client.hash import HashClient
-import setproctitle
-import subprocess
-from .cache import WorkerCache, request_hash
 
+import psutil
+import setproctitle
+from pymemcache.client.hash import HashClient
+
+from .cache import WorkerCache, request_hash
+from .config import get_config, local_target
 from .tools import bytes
 
 logging.basicConfig(
@@ -31,16 +30,17 @@ ACCEPT_SOCKET = None
 
 config = get_config()
 
-CACHE_ROOT = config['CACHE_ROOT']
+CACHE_ROOT = config["CACHE_ROOT"]
 
-SHARES = config['SHARES']
+SHARES = config["SHARES"]
 
-CACHE_FOLDER = config['CACHE_FOLDER']
-MEMCACHED = config['MEMCACHED']
+CACHE_FOLDER = config["CACHE_FOLDER"]
+MEMCACHED = config["MEMCACHED"]
 
 
 def validate_uuid(uid):
     return re.match(r"^[a-f0-9-]{36}$", uid)
+
 
 # From the MARS code
 
@@ -55,7 +55,7 @@ def extract_transfer_bytes(file_path):
 
     # Read the file
     if os.path.exists(file_path):
-        with open(file_path, 'r') as file:
+        with open(file_path, "r") as file:
             for line in file:
                 # Search for the pattern in each line
                 match = pattern.search(line)
@@ -66,13 +66,14 @@ def extract_transfer_bytes(file_path):
     # Return None if no match is found
     return None
 
+
 def find_if_request_finished(file_path):
     # Define the regular expression pattern
     # value reported by marsclient is not the exact file size
     pattern = re.compile(r"No errrors reported")
 
     # Read the file
-    with open(file_path, 'r') as file:
+    with open(file_path, "r") as file:
         for line in file:
             # Search for the pattern in each line
             match = pattern.search(line)
@@ -190,19 +191,18 @@ def mars_target(*, mars_executable, request, uid, logdir, environ):
 
         assert isinstance(requests, list)
 
-
         def out(text):
             text = text.encode()
             assert os.write(request_pipe_w, text) == len(text)
 
         for request in requests:
             out("RETRIEVE,\n")
-            
+
             for key, value in request.items():
-                if key != 'target':
+                if key != "target":
                     out("{0}={1},\n".format(key, tidy(value)))
-            out("{0}={1}\n".format('target', tidy(request['target'])))
-            
+            out("{0}={1}\n".format("target", tidy(request["target"])))
+
             os.close(request_pipe_r)
             os.close(request_pipe_w)
 
@@ -225,7 +225,7 @@ def mars_target(*, mars_executable, request, uid, logdir, environ):
             env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
 
     env.setdefault("MARS_ENVIRON_REQUEST_ID", uid)
-    LOG.info(f'{request_pipe_w} : is it a request?')
+    LOG.info(f"{request_pipe_w} : is it a request?")
 
     os.execlpe(mars_executable, mars_executable, env)
 
@@ -244,7 +244,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     mars_executable = "/usr/local/bin/mars"
     wbufsize = 1024 * 1024
     disable_nagle_algorithm = True
-    
+
     def do_POST(self):
         signal.signal(signal.SIGALRM, timeout_handler)
 
@@ -263,11 +263,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         setproctitle.setproctitle(f"cads_mars_server {uid}")
 
-        getattr(self, f'_{type}')(request, environ, uid)
-
+        getattr(self, f"_{type}")(request, environ, uid)
 
     def _pipe(self, request, environ, uid):
-
         fd, pid = mars(
             mars_executable=self.mars_executable,
             request=request,
@@ -414,108 +412,119 @@ class Handler(http.server.BaseHTTPRequestHandler):
         cache = WorkerCache(HashClient(MEMCACHED))
         rq_hash = request_hash(request)
         log_file = os.path.join(self.logdir, f"{uid}.log")
-        LOG.info(f'File request for {rq_hash} with uid {uid}')
+        LOG.info(f"File request for {rq_hash} with uid {uid}")
+
         def send_header(
-                code,
-                result,
-                exited=None,
-                killed=None,
-                retry_same_host=None,
-                retry_next_host=None,
-            ):
-                LOG.info(
-                    f"Sending header code={code} exited={exited} killed={killed}"
-                    f" retry_same_host={retry_same_host} retry_next_host={retry_next_host}"
+            code,
+            result,
+            exited=None,
+            killed=None,
+            retry_same_host=None,
+            retry_next_host=None,
+        ):
+            LOG.info(
+                f"Sending header code={code} exited={exited} killed={killed}"
+                f" retry_same_host={retry_same_host} retry_next_host={retry_next_host}"
+            )
+            signal.alarm(20)
+            self.send_response(code)
+            self.send_header("X-MARS-UID", uid)
+            self.send_header("Content-type", "application/json")
+            if exited is not None:
+                self.send_header("X-MARS-EXIT-CODE", str(exited))
+            if killed is not None:
+                self.send_header("X-MARS-SIGNAL", str(killed))
+            if retry_same_host is not None or result["status"] == "QUEUED":
+                self.send_header(
+                    "X-MARS-RETRY-SAME-HOST",
+                    int(result["status"] == "QUEUED" or retry_same_host is not None),
                 )
-                signal.alarm(20)
-                self.send_response(code)
-                self.send_header("X-MARS-UID", uid)
-                self.send_header("Content-type", "application/json")
-                if exited is not None:
-                    self.send_header("X-MARS-EXIT-CODE", str(exited))
-                if killed is not None:
-                    self.send_header("X-MARS-SIGNAL", str(killed))
-                if retry_same_host is not None or result['status'] == 'QUEUED':
-                    self.send_header("X-MARS-RETRY-SAME-HOST", int(result['status'] == 'QUEUED' or retry_same_host is not None))
-                if retry_next_host is not None:
-                    self.send_header("X-MARS-RETRY-NEXT-HOST", int(retry_next_host))
-                if result['status'] in ['QUEUED', 'RUNNING', 'COMPLETED'] :
-                    target = local_target(result)
-                    if os.path.exists(target):
-                        if result['size'] <= os.stat(target).st_size:
-                            result['status'] = 'COMPLETED'
-                            result['access'] += 1
-                    cache.set(rq_hash, result)
-                elif result['status'] == 'FAILED':
-                    if os.path.exists(local_target(result)):
-                        os.unlink(local_target(result))
-                    cache.delete(rq_hash)
-                self.send_header("X-DATA", json.dumps(result))
-                self.end_headers()
-                self.wfile.write(
-                    json.dumps(result).encode('utf-8')
-                )
-                signal.alarm(0)
+            if retry_next_host is not None:
+                self.send_header("X-MARS-RETRY-NEXT-HOST", int(retry_next_host))
+            if result["status"] in ["QUEUED", "RUNNING", "COMPLETED"]:
+                target = local_target(result)
+                if os.path.exists(target):
+                    if result["size"] <= os.stat(target).st_size:
+                        result["status"] = "COMPLETED"
+                        result["access"] += 1
+                cache.set(rq_hash, result)
+            elif result["status"] == "FAILED":
+                if os.path.exists(local_target(result)):
+                    os.unlink(local_target(result))
+                cache.delete(rq_hash)
+            self.send_header("X-DATA", json.dumps(result))
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode("utf-8"))
+            signal.alarm(0)
+
         _cache = cache.get(rq_hash)
         run = _cache is not None
         if _cache:
-            LOG.info(f'Cache found for request {uid}')
-            if _cache['status'] in ['RUNNING', 'QUEUED']:
-                LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
-                if _cache['host'] == os.uname().nodename.split('.')[0]:
+            LOG.info(f"Cache found for request {uid}")
+            if _cache["status"] in ["RUNNING", "QUEUED"]:
+                LOG.info(
+                    f'Request for {rq_hash} is already running on {_cache["host"]}'
+                )
+                if _cache["host"] == os.uname().nodename.split(".")[0]:
                     try:
-                        assert psutil.pid_exists(_cache['pid']), f'Process for mars.bin expected with pid {_cache["pid"]}, but not found'
+                        assert psutil.pid_exists(
+                            _cache["pid"]
+                        ), f'Process for mars.bin expected with pid {_cache["pid"]}, but not found'
                     except AssertionError as e:
                         LOG.error(e)
                         cache.delete(rq_hash)
-                        if _cache['target']:
-                            if os.path.exists(_cache['target']):
-                                os.unlink(_cache['target'])
-                        send_header(500, _cache, retry_next_host=True, exited=1)    
+                        if _cache["target"]:
+                            if os.path.exists(_cache["target"]):
+                                os.unlink(_cache["target"])
+                        send_header(500, _cache, retry_next_host=True, exited=1)
                 if not os.path.exists(log_file):
-                    with open(log_file, 'w') as _f:
-                        _f.write('Waiting and serving file from cads_mars_server cache')
+                    with open(log_file, "w") as _f:
+                        _f.write("Waiting and serving file from cads_mars_server cache")
                         send_header(200, _cache)
                     return
                 send_header(200, _cache)
-            elif _cache['status'] == 'COMPLETED':
-                out_file = _cache['target']
-                LOG.info(f'Cached request {rq_hash} for request {uid}')
+            elif _cache["status"] == "COMPLETED":
+                out_file = _cache["target"]
+                LOG.info(f"Cached request {rq_hash} for request {uid}")
                 if os.path.exists(out_file):
-                    LOG.info(f'Cached file {out_file} not found')
+                    LOG.info(f"Cached file {out_file} not found")
                     if not os.path.exists(log_file):
-                        with open(log_file, 'w') as _f:
-                            _f.write('File returned from cads_mars_server cache')
+                        with open(log_file, "w") as _f:
+                            _f.write("File returned from cads_mars_server cache")
                     send_header(200, _cache)
                     return
                 else:
-                    LOG.info(f'Cached file not found at {out_file} resubmitting request')
+                    LOG.info(
+                        f"Cached file not found at {out_file} resubmitting request"
+                    )
                     cache.delete(rq_hash)
                     return self._file(request, environ, uid)
-            elif _cache['status'] == 'FAILED':
-                LOG.info(f'Cached request {rq_hash} for request {uid} failed')
+            elif _cache["status"] == "FAILED":
+                LOG.info(f"Cached request {rq_hash} for request {uid} failed")
                 cache.delete(rq_hash)
-                if _cache['target']:
-                    os.unlink(_cache['target'])
+                if _cache["target"]:
+                    os.unlink(_cache["target"])
                 return self._file(request, environ, uid)
-                
+
         else:
-            out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], CACHE_FOLDER, f'{rq_hash}.grib')
+            out_file = os.path.join(
+                CACHE_ROOT, random.sample(SHARES, 1)[0], CACHE_FOLDER, f"{rq_hash}.grib"
+            )
             _cache = dict(
-                status='QUEUED',
-                host=os.uname().nodename.split('.')[0],
+                status="QUEUED",
+                host=os.uname().nodename.split(".")[0],
                 mars=CACHE_FOLDER,
-                share=out_file.split('/')[-3],
+                share=out_file.split("/")[-3],
                 target=out_file,
-                access=0
+                access=0,
             )
             run = True
             cache.set(rq_hash, _cache)
             start = time.time()
 
-            request.update({'target': _cache['target']})
-            if 'size' not in _cache:
-                environ.update({'MARS_AUTO_SPLIT_BY_DATES': 1})
+            request.update({"target": _cache["target"]})
+            if "size" not in _cache:
+                environ.update({"MARS_AUTO_SPLIT_BY_DATES": 1})
                 fd, pid = mars_target(
                     mars_executable=self.mars_executable,
                     request=request,
@@ -523,7 +532,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     logdir=self.logdir,
                     environ=environ,
                 )
-                _cache.update({'pid': pid})
+                _cache.update({"pid": pid})
                 cache.set(rq_hash, _cache)
 
             wayting = True
@@ -533,34 +542,43 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 expected_size = extract_transfer_bytes(log_file)
                 if expected_size:
                     wayting = False
-                    _cache.update({'size': expected_size, 'status': 'RUNNING', 'access': _cache.get('access', 0) + 1})
+                    _cache.update(
+                        {
+                            "size": expected_size,
+                            "status": "RUNNING",
+                            "access": _cache.get("access", 0) + 1,
+                        }
+                    )
                     cache.set(rq_hash, _cache)
                     break
                 if time.time() - t0 > 40:
-                    send_header(200, _cache, retry_same_host=True, retry_next_host=False)
-                time.sleep(.004)
+                    send_header(
+                        200, _cache, retry_same_host=True, retry_next_host=False
+                    )
+                time.sleep(0.004)
             total = 0
             t0 = time.time()
             # try:
             if total < expected_size:
                 while True:
-                    if os.path.exists(request['target']):
-                        total = os.stat(request['target']).st_size
-                        LOG.info(f'{total / expected_size * 100:0.2f}% of {expected_size}')
+                    if os.path.exists(request["target"]):
+                        total = os.stat(request["target"]).st_size
+                        LOG.info(
+                            f"{total / expected_size * 100:0.2f}% of {expected_size}"
+                        )
                         if total >= expected_size:
                             break
-                    time.sleep(.1)
+                    time.sleep(0.1)
 
             if total >= expected_size:
-                _cache.update({'status': 'COMPLETED'})
-                _cache.update({'size': os.stat(request['target']).st_size})
+                _cache.update({"status": "COMPLETED"})
+                _cache.update({"size": os.stat(request["target"]).st_size})
                 cache.set(rq_hash, _cache)
                 elapsed = time.time() - start
                 LOG.info(
                     f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
                 )
                 send_header(200, _cache)
-
 
     def do_GET(self):
         """Retrieve the log file for the given UID."""

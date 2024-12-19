@@ -12,6 +12,7 @@ import urllib3
 from urllib3.connectionpool import HTTPConnectionPool
 
 from .tools import bytes
+from .config import get_config, local_target
 
 LOG = logging.getLogger(__name__)
 
@@ -37,8 +38,7 @@ class Result:
         message=None,
         retry_same_host=False,
         retry_next_host=False,
-        data=None
-
+        data=None,
     ):
         self.error = error
         self.message = message
@@ -75,11 +75,12 @@ class RemoteMarsClientSession:
         url,
         request,
         environ,
-        target,
+        target=None,
         open_mode="wb",
         position=0,
         timeout=60,
         log=LOG,
+        transfer_type="pipe",
     ):
         self.url = url
         self.request = request
@@ -91,6 +92,7 @@ class RemoteMarsClientSession:
         self.log = log
         self.open_mode = open_mode
         self.position = position
+        self.transfer_type = transfer_type
 
     def _transfer(self, r):
         start = time.time()
@@ -142,11 +144,7 @@ class RemoteMarsClientSession:
             requests.head(self.url, timeout=self.timeout)
             r = requests.post(
                 self.url,
-                json=dict(
-                    request=self.request,
-                    environ=self.environ,
-                    type='pipe'
-                ),
+                json=dict(request=self.request, environ=self.environ, type=self.transfer_type),
                 stream=True,
             )
         except requests.exceptions.Timeout as e:
@@ -185,11 +183,17 @@ class RemoteMarsClientSession:
             if "X-MARS-RETRY-NEXT-HOST" in r.headers:
                 retry_next_host = int(r.headers["X-MARS-RETRY-NEXT-HOST"])
 
+            if self.transfer_type = "file" and "X-DATA" in r.headers:
+                data = json.loads(r.headers["X-DATA"])
+            else:
+                data = None
+
             return Result(
                 error=error,
                 message=r.text or str(error),
                 retry_same_host=retry_same_host,
                 retry_next_host=retry_next_host or retry_same_host,
+                data=data
             )
 
         uid = r.headers["X-MARS-UID"]
@@ -200,18 +204,65 @@ class RemoteMarsClientSession:
                 self.log.error(f"MARS client exited with code {exitcode}")
 
         if code == http.HTTPStatus.OK:
+            if self.transfer_type == "file" and "X-DATA" in r.headers:
+                try:
+                    res = json.loads(r.headers["X-DATA"])
+                except:
+                    print(r.headers)
+                if not res:
+                    return Result(
+                        error=error,
+                        retry_same_host=True,
+                        retry_next_host=True,
+                        message="No result presented",
+                    )
+            else:
+                res = None
+
             try:
-                self._transfer(r)
+                if self.transfer_type == "file":
+                    if "target" in res:
+                        target = local_target(res)
+                        while res["status"] in (
+                            "QUEUED",
+                            "RUNNING",
+                        ):
+                            time.sleep(0.5)
+                            return self.execute()
+
+                        if res["status"] == "COMPLETED":
+                            assert os.path.exists(
+                                target
+                            ), f"File not found in the destination {target}"
+                            # res = json.loads(requests.get(self.url + "/" + uid).headers['X-DATA'])
+                            return Result(
+                                error=None,
+                                retry_same_host=True,
+                                retry_next_host=True,
+                                message=requests.get(self.url + "/" + uid).text,
+                                data=res,
+                            )
+                        elif res["status"] == "FAILED":
+                            return Result(
+                                error=res["message"],
+                                message=requests.get(self.url + "/" + uid).text,
+                                retry_same_host=False,
+                                retry_next_host=True,
+                                data=res,
+                            )
+                else:
+                    self._transfer(r)
             except ClientError as e:
                 self.log.exception("Error transferring file (ClientError)")
                 return Result(
                     error=e,
                     retry_same_host=e.retry_same_host,
                     retry_next_host=e.retry_next_host,
+                    data=res
                 )
             except urllib3.exceptions.ProtocolError as e:
                 self.log.exception("Error transferring file (ProtocolError)")
-                return Result(error=e, retry_same_host=True, retry_next_host=True)
+                return Result(error=e, retry_same_host=True, retry_next_host=True, data=res)
             except Exception as e:
                 self.log.exception("Error transferring file (Other errors)")
                 error = e
@@ -232,7 +283,7 @@ class RemoteMarsClientSession:
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
             self.log.exception("Error deleting log file")
 
-        return Result(error=error, message=logfile or str(error))
+        return Result(error=error, message=logfile or str(error), data=res)
 
     def __del__(self):
         try:
@@ -253,6 +304,7 @@ class RemoteMarsClient:
         delay=10,
         timeout=60,
         log=LOG,
+        transfer_type="pipe",
     ):
         self.url = url
         self.retries = retries
@@ -261,6 +313,7 @@ class RemoteMarsClient:
         self.log = log
         self.open_mode = open_mode
         self.position = position
+        self.transfer_type = transfer_type
 
     def execute(self, request, environ, target):
         session = RemoteMarsClientSession(
@@ -272,6 +325,7 @@ class RemoteMarsClient:
             open_mode=self.open_mode,
             position=self.position,
             log=self.log,
+            transfer_type=self.transfer_type,
         )
 
         for i in range(self.retries):
@@ -291,16 +345,24 @@ class RemoteMarsClient:
 
 
 class RemoteMarsClientCluster:
-    def __init__(self, urls, retries=3, delay=10, timeout=60, log=LOG):
+    def __init__(
+        self, urls, retries=3, delay=10, timeout=60, log=LOG, transfer_type="pipe"
+    ):
         self.urls = urls
         self.retries = retries
         self.delay = delay
         self.timeout = timeout
         self.log = log
+        self.transfer_type = transfer_type
 
-    def execute(self, request, environ, target):
+    def execute(self, request, environ, target=None):
+        if self.transfer_type == "pipe" and target is None:
+            raise ValueError("Target is required for pipe transfer")
+
         if isinstance(request, dict):
-            return self._execute(request, environ, target, "wb", 0)
+            return self._execute(
+                request, environ, target=target, open_mode="wb", position=0
+            )
 
         req = {}
         open_mode = "wb"
@@ -319,19 +381,22 @@ class RemoteMarsClientCluster:
                 result.message = "\n".join(messages)
                 return result
 
-            open_mode = "ab"
-            position = os.path.getsize(target)
+            if self.transfer_type == "pipe":
+                open_mode = "ab"
+                position = os.path.getsize(target)
 
         result.message = "\n".join(messages)
         return result
 
-    def _execute(self, request, environ, target, open_mode, position):
+    def _execute(
+        self, request, environ, target=None, open_mode="wb", position=0
+    ):
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
-        # request_id = environ.get("request_id", "unknown")
+        request_id = environ.get("request_id", "unknown")
         try:
             for url in self.urls:
-                # setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
+                setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
 
                 client = RemoteMarsClient(
                     url=url,
@@ -341,6 +406,7 @@ class RemoteMarsClientCluster:
                     open_mode=open_mode,
                     position=position,
                     log=self.log,
+                    transfer_type=self.transfer_type,
                 )
 
                 reply = client.execute(request, environ, target)

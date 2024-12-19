@@ -5,7 +5,7 @@ import sys
 
 import click
 
-from . import client_pipe as client
+from . import client as client
 from . import server
 
 
