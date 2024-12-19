@@ -147,7 +147,7 @@ class RemoteMarsClientSession:
                 json=dict(
                     request=self.request, environ=self.environ, type=self.transfer_type
                 ),
-                stream=True,
+                stream=self.transfer_type == "pipe",
             )
         except requests.exceptions.Timeout as e:
             self.log.error(f"Timeout {e}")
