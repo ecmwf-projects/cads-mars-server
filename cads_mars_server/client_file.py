@@ -22,29 +22,25 @@ LOG = logging.getLogger(__name__)
 HTTPConnectionPool.ConnectionCls = ConnectionWithKeepAlive
 
 
+
 class RemoteMarsClientSession:
+    config = get_config()
     def __init__(
         self,
         *,
         url,
         request,
         environ,
-        target,
-        open_mode="wb",
-        position=0,
         timeout=60,
         log=LOG,
     ):
         self.url = url
         self.request = request
         self.environ = environ
-        self.target = target
         self.uid = None
         self.endr_recieved = False
         self.timeout = timeout
         self.log = log
-        self.open_mode = open_mode
-        self.position = position
 
     def execute(self):
         self.log.info(f"Calling {self.url} {self.request} {self.environ}")
@@ -60,7 +56,7 @@ class RemoteMarsClientSession:
                     environ=self.environ,
                     type='file'
                 ),
-                stream=True,
+                stream=False,
             )
         except requests.exceptions.Timeout as e:
             self.log.error(f"Timeout {e}")
@@ -68,7 +64,6 @@ class RemoteMarsClientSession:
         except requests.exceptions.ConnectionError as e:
             self.log.error(f"Connection error {e}")
             return Result(error=e, retry_next_host=True)
-        
 
         try:
             r.raise_for_status()
@@ -98,7 +93,6 @@ class RemoteMarsClientSession:
 
             if "X-MARS-RETRY-NEXT-HOST" in r.headers:
                 retry_next_host = int(r.headers["X-MARS-RETRY-NEXT-HOST"])
-            data = None
             if "X-DATA" in r.headers:
                 data = json.loads(r.headers["X-DATA"])
 
@@ -116,30 +110,53 @@ class RemoteMarsClientSession:
             if "X-MARS-EXIT-CODE" in r.headers:
                 exitcode = int(r.headers["X-MARS-EXIT-CODE"])
                 self.log.error(f"MARS client exited with code {exitcode}")
-
+        res = None
         if code == http.HTTPStatus.OK:
-            self.log.info(f"{r.headers}")
-            time.sleep(1)
-            if 'X-DATA' in r.headers:
-                data = json.loads(r.headers['X-DATA'])
-                if 'target' in data:
-                    # Client returns the target file path in local coordinates
-                    target = local_target(data['target'])
-                    data['target'] = target
-                    while not os.path.exists(target):
+            try:
+                res = json.loads(r.headers['X-DATA'])
+            except:
+                print(r.headers)
+            if not res:
+                return Result(error=error, retry_same_host=True, retry_next_host=True, message='No result presented')
+            try:
+                if 'target' in res:
+                    target = local_target(res)
+                    while res['status'] in ('QUEUED', 'RUNNING', ):
                         time.sleep(.5)
-                    while os.stat(target).st_size < data['size'] and data['status'] in ('QUEUED', 'RUNNING', ):
-                        time.sleep(.5)
-                    return Result(
-                        error=None,
-                        message=f"File from cache found on {data['share']} by {data['host']}",
-                        retry_same_host=retry_same_host,
-                        retry_next_host=retry_next_host or retry_same_host,
-                        data=data
-                    )
-            else:
-                self.log.info(f"We got code {code} from server {self.url} resubmitting request")
-                return self.execute()
+                        return self.execute()
+                    
+                    if res['status'] == 'COMPLETED':
+                        assert os.path.exists(target), f'File not found in the destination {target}'
+                        # res = json.loads(requests.get(self.url + "/" + uid).headers['X-DATA'])
+                        return Result(
+                            error=None,
+                            retry_same_host=True,
+                            retry_next_host=True,
+                            message=requests.get(self.url + "/" + uid).text,
+                            data=res,
+                        )
+                    elif res['status'] == 'FAILED':
+                        return Result(
+                            error=res['message'],
+                            message=requests.get(self.url + "/" + uid).text,
+                            retry_same_host=False,
+                            retry_next_host=True,
+                            data=res
+                        )
+            except ClientError as e:
+                self.log.exception("Error transferring file (ClientError)")
+                return Result(
+                    error=e,
+                    retry_same_host=e.retry_same_host,
+                    retry_next_host=e.retry_next_host,
+                    data=res
+                )
+            except urllib3.exceptions.ProtocolError as e:
+                self.log.exception("Error transferring file (ProtocolError)")
+                return Result(error=e, retry_same_host=True, retry_next_host=True, data=res)
+            except Exception as e:
+                self.log.exception("Error transferring file (Other errors)")
+                error = e
 
         logfile = None
 
@@ -157,7 +174,7 @@ class RemoteMarsClientSession:
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
             self.log.exception("Error deleting log file")
 
-        return Result(error=error, message=logfile or str(error))
+        return Result(error=error, message=logfile or str(error), data=res)
 
     def __del__(self):
         try:
@@ -241,10 +258,10 @@ class RemoteMarsClientCluster:
     def _execute(self, request, environ):
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
-        # request_id = environ.get("request_id", "unknown")
+        request_id = environ.get("request_id", "unknown")
         try:
             for url in self.urls:
-                # setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
+                setproctitle.setproctitle(f"cads_mars_client {request_id} {url}")
 
                 client = RemoteMarsClient(
                     url=url,
@@ -267,7 +284,6 @@ class RemoteMarsClientCluster:
             setproctitle.setproctitle(saved)
 
         return reply
-    
     
 class MarsAdaptor:
     def __init__(
