@@ -105,10 +105,8 @@ class RemoteMarsClientSession:
                 self.log.error(f"MARS client exited with code {exitcode}")
         res = None
         if code == http.HTTPStatus.OK:
-            try:
-                res = json.loads(r.headers["X-DATA"])
-            except:
-                print(r.headers)
+            res = json.loads(r.headers["X-DATA"])
+
             if not res:
                 return Result(
                     error=error,

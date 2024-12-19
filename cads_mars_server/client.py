@@ -11,8 +11,8 @@ import setproctitle
 import urllib3
 from urllib3.connectionpool import HTTPConnectionPool
 
+from .config import local_target
 from .tools import bytes
-from .config import get_config, local_target
 
 LOG = logging.getLogger(__name__)
 
@@ -144,7 +144,9 @@ class RemoteMarsClientSession:
             requests.head(self.url, timeout=self.timeout)
             r = requests.post(
                 self.url,
-                json=dict(request=self.request, environ=self.environ, type=self.transfer_type),
+                json=dict(
+                    request=self.request, environ=self.environ, type=self.transfer_type
+                ),
                 stream=True,
             )
         except requests.exceptions.Timeout as e:
@@ -183,7 +185,7 @@ class RemoteMarsClientSession:
             if "X-MARS-RETRY-NEXT-HOST" in r.headers:
                 retry_next_host = int(r.headers["X-MARS-RETRY-NEXT-HOST"])
 
-            if self.transfer_type = "file" and "X-DATA" in r.headers:
+            if self.transfer_type == "file" and "X-DATA" in r.headers:
                 data = json.loads(r.headers["X-DATA"])
             else:
                 data = None
@@ -193,7 +195,7 @@ class RemoteMarsClientSession:
                 message=r.text or str(error),
                 retry_same_host=retry_same_host,
                 retry_next_host=retry_next_host or retry_same_host,
-                data=data
+                data=data,
             )
 
         uid = r.headers["X-MARS-UID"]
@@ -205,10 +207,7 @@ class RemoteMarsClientSession:
 
         if code == http.HTTPStatus.OK:
             if self.transfer_type == "file" and "X-DATA" in r.headers:
-                try:
-                    res = json.loads(r.headers["X-DATA"])
-                except:
-                    print(r.headers)
+                res = json.loads(r.headers["X-DATA"])
                 if not res:
                     return Result(
                         error=error,
@@ -258,11 +257,13 @@ class RemoteMarsClientSession:
                     error=e,
                     retry_same_host=e.retry_same_host,
                     retry_next_host=e.retry_next_host,
-                    data=res
+                    data=res,
                 )
             except urllib3.exceptions.ProtocolError as e:
                 self.log.exception("Error transferring file (ProtocolError)")
-                return Result(error=e, retry_same_host=True, retry_next_host=True, data=res)
+                return Result(
+                    error=e, retry_same_host=True, retry_next_host=True, data=res
+                )
             except Exception as e:
                 self.log.exception("Error transferring file (Other errors)")
                 error = e
@@ -388,9 +389,7 @@ class RemoteMarsClientCluster:
         result.message = "\n".join(messages)
         return result
 
-    def _execute(
-        self, request, environ, target=None, open_mode="wb", position=0
-    ):
+    def _execute(self, request, environ, target=None, open_mode="wb", position=0):
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
         request_id = environ.get("request_id", "unknown")
