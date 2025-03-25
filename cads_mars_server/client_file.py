@@ -13,7 +13,6 @@ from urllib3.connectionpool import HTTPConnectionPool
 
 from .tools import bytes
 from .client_pipe import ConnectionWithKeepAlive, Result, ClientError
-from .cache import WorkerCache
 from .config import get_config, local_target
 
 LOG = logging.getLogger(__name__)
