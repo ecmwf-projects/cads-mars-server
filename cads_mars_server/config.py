@@ -25,4 +25,4 @@ def local_target(cache_object: dict) -> str:
         _cache_root, share = _.split('/')[1:]
         print(_cache_root, share)
         _c = get_config()
-        return target.replace(f'/{_cache_root}', f"{_c['CACHE_ROOT']}")
+        return target.replace(f'/{_cache_root}/', f"{_c['CACHE_ROOT']}")
