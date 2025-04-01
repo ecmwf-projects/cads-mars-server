@@ -129,7 +129,7 @@ class RemoteMarsClientSession:
                 raise ValueError("ENDR not received")
 
         elapsed = time.time() - start
-        self.log.info(
+        self.log.debug(
             f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
         )
 

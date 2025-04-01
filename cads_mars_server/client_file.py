@@ -43,27 +43,29 @@ class RemoteMarsClientSession:
 
     def execute(self):
         self.log.info(f"Calling {self.url} {self.request} {self.environ}")
-
         error = None
-
         try:
-            requests.head(self.url, timeout=self.timeout)
-            r = requests.post(
-                self.url,
-                json=dict(
-                    request=self.request,
-                    environ=self.environ,
-                    type='file'
-                ),
-                stream=False,
-            )
+            header_rq = requests.head(self.url, timeout=self.timeout)
+            remote_config = json.loads(header_rq.headers.get('CACHE_CONFIG', '{}'))
+            if remote_config:
+                r = requests.post(
+                    self.url,
+                    json=dict(
+                        request=self.request,
+                        environ=self.environ,
+                        type='file'
+                    ),
+                    stream=False,
+                )
+            else:
+                self.log.error(f"The server {self.url} does not disclose its mars cache settings")
+                return Result(error=f"The server {self.url} does not disclose its mars cache settings", retry_next_host=True)
         except requests.exceptions.Timeout as e:
             self.log.error(f"Timeout {e}")
             return Result(error=e, retry_next_host=True)
         except requests.exceptions.ConnectionError as e:
             self.log.error(f"Connection error {e}")
             return Result(error=e, retry_next_host=True)
-
         try:
             r.raise_for_status()
         except requests.exceptions.HTTPError as e:
@@ -114,7 +116,7 @@ class RemoteMarsClientSession:
             try:
                 res = json.loads(r.headers['X-DATA'])
             except:
-                print(r.headers)
+                self.log.debug(r.headers, exception=True)
             if not res:
                 return Result(error=error, retry_same_host=True, retry_next_host=True, message='No result presented')
             try:

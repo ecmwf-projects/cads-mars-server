@@ -20,9 +20,8 @@ def get_config():
 
 def local_target(cache_object: dict) -> str:
     if cache_object.get('target'):
-        target = cache_object['target']
-        _, _file = tuple(target.split('/mars/'))
-        _cache_root, share = _.split('/')[1:]
-        print(_cache_root, share)
         _c = get_config()
+        target = cache_object['target']
+        _, _file = tuple(target.split(f'/{_c.get('cache_folder',"mars")}/'))
+        _cache_root, share = _.split('/')[1:]
         return target.replace(f'/{_cache_root}/', f"{_c['CACHE_ROOT']}")

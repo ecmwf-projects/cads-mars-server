@@ -481,17 +481,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif _cache['status'] == 'COMPLETED':
                 out_file = _cache['target']
                 LOG.info(f'Cached request {rq_hash} for request {uid}')
-                if os.path.exists(out_file):
-                    LOG.info(f'Cached file {out_file} not found')
+                if os.path.exists(out_file) and os.stat(out_file).st_size == _cache['size']:
+                    LOG.info(f'Cached file {out_file} found')
                     if not os.path.exists(log_file):
                         with open(log_file, 'w') as _f:
                             _f.write('File returned from cads_mars_server cache')
                     send_header(200, _cache)
                     return
+                elif os.path.exists(out_file):
+                    LOG.info(f'Cached file {out_file} found but size is not the one reported deleting and ')
+                    os.unlink(out_file)
+                    cache.delete(rq_hash)
                 else:
                     LOG.info(f'Cached file not found at {out_file} resubmitting request')
                     cache.delete(rq_hash)
-                    return self._file(request, environ, uid)
+                return self._file(request, environ, uid)
             elif _cache['status'] == 'FAILED':
                 LOG.info(f'Cached request {rq_hash} for request {uid} failed')
                 cache.delete(rq_hash)
@@ -608,6 +612,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # Used as a 'ping'
         LOG.info("ping occuring")
         self.send_response(204)
+        self.send_header('MARS_CONFIG', json.dumps(config))
         self.end_headers()
 
     def handle(self):
