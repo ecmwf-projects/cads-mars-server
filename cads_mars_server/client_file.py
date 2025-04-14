@@ -234,14 +234,14 @@ class RemoteMarsClientCluster:
         self.timeout = timeout
         self.log = log
 
-    def execute(self, request, environ):
-        if isinstance(request, dict):
-            return self._execute(request, environ)
+    def execute(self, requests, environ):
+        if isinstance(requests, dict):
+            return self._execute(requests, environ)
 
         req = {}
         messages = []
 
-        for r in request:
+        for r in requests:
             req.update(r)
 
             result = self._execute(
