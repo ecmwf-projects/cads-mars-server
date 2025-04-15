@@ -612,7 +612,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # Used as a 'ping'
         LOG.info("ping occuring")
         self.send_response(204)
-        self.send_header('MARS_CONFIG', json.dumps(config))
+        self.send_header('CACHE_CONFIG', json.dumps(config))
         self.end_headers()
 
     def handle(self):
