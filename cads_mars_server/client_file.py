@@ -47,6 +47,7 @@ class RemoteMarsClientSession:
         try:
             header_rq = requests.head(self.url, timeout=self.timeout)
             remote_config = json.loads(header_rq.headers.get('CACHE_CONFIG', '{}'))
+            self.log.info(f"Remote config {remote_config}")
             if remote_config:
                 r = requests.post(
                     self.url,

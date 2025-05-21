@@ -550,7 +550,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 while True:
                     if os.path.exists(request['target']):
                         total = os.stat(request['target']).st_size
-                        LOG.info(f'{total / expected_size * 100:0.2f}% of {expected_size}')
+                        LOG.debug(f'{total / expected_size * 100:0.2f}% of {expected_size}')
                         if total >= expected_size:
                             break
                     time.sleep(.1)
