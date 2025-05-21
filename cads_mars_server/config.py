@@ -7,10 +7,48 @@ MARS_CONFIG_FILE = os.getenv('MARS_CONFIG_FILE', DEFAULT_CONFIG_FILE)
 DEFAULT_CONFIG = dict(
     CACHE_ROOT='/',
     SHARES=['download-dev-0001', 'download-dev-0002'],
-    MEMCACHED=['mars-worker-dev-1000:11211', 'mars-worker-dev-1000:11211'],
+    MEMCACHED=['mars-worker-dev-1000:11211', 'mars-worker-dev-1000:11211',
+               'mars-worker-dev-2000:11211', 'mars-worker-dev-2001:11211'],
     CACHE_FOLDER='mars',
-    DOWNLOAD_SERVERS=[]
+    DOWNLOAD_SERVERS=[
+        "https://download-cci1-0000.copernicus-climate.eu",
+        "https://download-cci1-0001.copernicus-climate.eu",
+        "https://download-cci1-0002.copernicus-climate.eu",
+        "https://download-cci1-0003.copernicus-climate.eu",
+        "https://download-cci1-0004.copernicus-climate.eu",
+        "https://download-cci1-0005.copernicus-climate.eu",
+        "https://download-cci1-0007.copernicus-climate.eu",
+        "https://download-cci1-0008.copernicus-climate.eu",
+        "https://download-cci1-0009.copernicus-climate.eu",
+        "https://download-cci2-0000.copernicus-climate.eu",
+        "https://download-cci2-0001.copernicus-climate.eu",
+        "https://download-cci2-0002.copernicus-climate.eu",
+        "https://download-cci2-0003.copernicus-climate.eu",
+        "https://download-cci2-0004.copernicus-climate.eu",
+        "https://download-cci2-0005.copernicus-climate.eu",
+        "https://download-cci2-0007.copernicus-climate.eu",
+        "https://download-cci2-0008.copernicus-climate.eu", 
+        "https://download-cci2-0009.copernicus-climate.eu"]
 )
+CACHE_ROOT: '/'
+SHARES:
+- download-cci1-0000
+- download-cci1-0001
+- download-cci1-0002
+- download-cci1-0003
+- download-cci1-0004
+- download-cci1-0005
+- download-cci1-0007
+- download-cci1-0008
+- download-cci1-0009
+MEMCACHED:
+- mars-worker-dev-1000.shared.compute.cci1.ecmwf.int:11211
+- mars-worker-dev-1001.shared.compute.cci1.ecmwf.int:11211
+- mars-worker-dev-2000.shared.compute.cci2.ecmwf.int:11211
+- mars-worker-dev-2001.shared.compute.cci2.ecmwf.int:11211
+CACHE_FOLDER: mars
+DOWNLOAD_SERVERS:
+
 
 def get_config():
     if os.path.exists(MARS_CONFIG_FILE):
