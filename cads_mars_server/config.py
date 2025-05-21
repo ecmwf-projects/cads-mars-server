@@ -50,4 +50,4 @@ def local_target(cache_object: dict) -> str:
         if os.path.exists(out):
             return out
         else:
-            return f'https://{random.sample(_c["DOWNLOAD_SERVERS"], 1)[0]}/{share}/{_file}'
+            return f'{random.sample(_c["DOWNLOAD_SERVERS"], 1)[0]}/{share}/{_file}'
