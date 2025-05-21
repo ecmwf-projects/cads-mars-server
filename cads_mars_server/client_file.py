@@ -16,6 +16,8 @@ from .client_pipe import ConnectionWithKeepAlive, Result, ClientError
 from .config import get_config, local_target
 
 LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG)
+
 
 
 HTTPConnectionPool.ConnectionCls = ConnectionWithKeepAlive
@@ -47,8 +49,8 @@ class RemoteMarsClientSession:
         try:
             header_rq = requests.head(self.url, timeout=self.timeout)
             remote_config = json.loads(header_rq.headers.get('CACHE_CONFIG', '{}'))
-            self.log.info(f"Remote config {remote_config}")
-            if remote_config and all(_ in remote_config['SHARES'] for _ in self.config['SHARES']):
+            self.log.debug(f"Remote config {remote_config}")
+            if remote_config: # and all(_ in remote_config['SHARES'] for _ in self.config['SHARES']):
                 r = requests.post(
                     self.url,
                     json=dict(
