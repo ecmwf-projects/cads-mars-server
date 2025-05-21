@@ -1,5 +1,6 @@
 import yaml
 import os
+import random
 
 DEFAULT_CONFIG_FILE = '/etc/cads-mars-server.yaml'
 MARS_CONFIG_FILE = os.getenv('MARS_CONFIG_FILE', DEFAULT_CONFIG_FILE)
@@ -8,6 +9,7 @@ DEFAULT_CONFIG = dict(
     SHARES=['download-dev-0001', 'download-dev-0002'],
     MEMCACHED=['mars-worker-dev-1000:11211', 'mars-worker-dev-1000:11211'],
     CACHE_FOLDER='mars'
+    DOWNLOAD_SERVERS=[]
 )
 
 def get_config():
@@ -24,4 +26,8 @@ def local_target(cache_object: dict) -> str:
         target = cache_object['target']
         _, _file = tuple(target.split(f'/{_c.get("cache_folder","mars")}/'))
         _cache_root, share = _.split('/')[1:]
-        return target.replace(f'/{_cache_root}/', f"{_c['CACHE_ROOT']}")
+        out = target.replace(f'/{_cache_root}/', f"{_c['CACHE_ROOT']}")
+        if os.path.exists(out):
+            return out
+        else:
+            return f'https://{random.sample(_c["DOWNLOAD_SERVERS"], 1)[0]}/{share}/{_file}'

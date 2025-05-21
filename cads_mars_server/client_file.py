@@ -48,7 +48,7 @@ class RemoteMarsClientSession:
             header_rq = requests.head(self.url, timeout=self.timeout)
             remote_config = json.loads(header_rq.headers.get('CACHE_CONFIG', '{}'))
             self.log.info(f"Remote config {remote_config}")
-            if remote_config:
+            if remote_config and all(_ in remote_config['SHARES'] for _ in self.config['SHARES']):
                 r = requests.post(
                     self.url,
                     json=dict(
@@ -286,13 +286,5 @@ class RemoteMarsClientCluster:
             setproctitle.setproctitle(saved)
 
         return reply
-    
-class MarsAdaptor:
-    def __init__(
-            self,
-            request,
-            env
-    ) -> None:
-        self.request = request
-        self.env = env
+
    
