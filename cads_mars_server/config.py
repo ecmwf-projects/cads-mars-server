@@ -30,24 +30,6 @@ DEFAULT_CONFIG = dict(
         "https://download-cci2-0008.copernicus-climate.eu", 
         "https://download-cci2-0009.copernicus-climate.eu"]
 )
-CACHE_ROOT: '/'
-SHARES:
-- download-cci1-0000
-- download-cci1-0001
-- download-cci1-0002
-- download-cci1-0003
-- download-cci1-0004
-- download-cci1-0005
-- download-cci1-0007
-- download-cci1-0008
-- download-cci1-0009
-MEMCACHED:
-- mars-worker-dev-1000.shared.compute.cci1.ecmwf.int:11211
-- mars-worker-dev-1001.shared.compute.cci1.ecmwf.int:11211
-- mars-worker-dev-2000.shared.compute.cci2.ecmwf.int:11211
-- mars-worker-dev-2001.shared.compute.cci2.ecmwf.int:11211
-CACHE_FOLDER: mars
-DOWNLOAD_SERVERS:
 
 
 def get_config():
