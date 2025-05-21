@@ -8,7 +8,7 @@ DEFAULT_CONFIG = dict(
     CACHE_ROOT='/',
     SHARES=['download-dev-0001', 'download-dev-0002'],
     MEMCACHED=['mars-worker-dev-1000:11211', 'mars-worker-dev-1000:11211'],
-    CACHE_FOLDER='mars'
+    CACHE_FOLDER='mars',
     DOWNLOAD_SERVERS=[]
 )
 
