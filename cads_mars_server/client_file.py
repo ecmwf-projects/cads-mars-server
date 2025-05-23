@@ -19,9 +19,7 @@ LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 
 
-
 HTTPConnectionPool.ConnectionCls = ConnectionWithKeepAlive
-
 
 
 class RemoteMarsClientSession:
@@ -130,7 +128,11 @@ class RemoteMarsClientSession:
                         return self.execute()
                     
                     if res['status'] == 'COMPLETED':
-                        assert os.path.exists(target), f'File not found in the destination {target}'
+                        if target.startswith('http'):
+                            # we have the file in a remote location and we return the URL
+                            requests.head(target).raise_for_status()
+                        else:
+                            assert os.path.exists(target), f'File not found in the destination {target}'
                         # res = json.loads(requests.get(self.url + "/" + uid).headers['X-DATA'])
                         return Result(
                             error=None,
