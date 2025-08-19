@@ -11,10 +11,10 @@ A proxy MARS server and client designed for CADS
 
 ## Workflow for developers/contributors
 
-For best experience create a new conda environment (e.g. DEVELOP) with Python 3.11:
+For best experience create a new conda environment (e.g. DEVELOP) with Python 3.12:
 
 ```
-conda create -n DEVELOP -c conda-forge python=3.11
+conda create -n DEVELOP -c conda-forge python=3.12
 conda activate DEVELOP
 ```
 

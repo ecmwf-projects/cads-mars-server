@@ -4,7 +4,7 @@ WORKDIR /src/cads-mars-server
 
 COPY environment.yml /src/cads-mars-server/
 
-RUN conda install -c conda-forge gcc python=3.11 \
+RUN conda install -c conda-forge gcc python=3.12 \
     && conda env update -n base -f environment.yml
 
 COPY . /src/cads-mars-server
