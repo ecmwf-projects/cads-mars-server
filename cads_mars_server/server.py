@@ -297,7 +297,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         elapsed = time.time() - start
         LOG.info(
-            f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}, chunks: {count:,}"
+            f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total / elapsed)}, chunks: {count:,}"
         )
 
     def do_GET(self):

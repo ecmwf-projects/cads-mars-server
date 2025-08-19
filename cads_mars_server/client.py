@@ -127,7 +127,7 @@ class RemoteMarsClientSession:
 
         elapsed = time.time() - start
         self.log.info(
-            f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}"
+            f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total / elapsed)}"
         )
 
     def execute(self):

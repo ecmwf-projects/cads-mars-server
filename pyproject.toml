@@ -65,6 +65,7 @@ convention = "numpy"
 packages = ["cads_mars_server"]
 
 [tool.setuptools_scm]
+fallback_version = "999"
 write_to = "cads_mars_server/version.py"
 write_to_template = '''
 # Do not change! Do not track in version control!
