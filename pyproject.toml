@@ -10,7 +10,13 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.6",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering"
 ]
 dependencies = [
@@ -65,6 +71,7 @@ convention = "numpy"
 packages = ["cads_mars_server"]
 
 [tool.setuptools_scm]
+fallback_version = "999"
 write_to = "cads_mars_server/version.py"
 write_to_template = '''
 # Do not change! Do not track in version control!

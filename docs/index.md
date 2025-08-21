@@ -6,6 +6,7 @@ A proxy MARS server and client designed for CADS.
 :caption: 'Contents:'
 :maxdepth: 2
 
+README.md
 API Reference <_api/cads_mars_server/index>
 ```
 
