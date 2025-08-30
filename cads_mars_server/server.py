@@ -16,10 +16,11 @@ from .config import get_config, local_target
 from pymemcache.client.hash import HashClient
 import setproctitle
 import subprocess
-from .cache import WorkerCache, request_hash
+#from .cache import WorkerCache, request_hash
+from dscache.cache import CacheMaintainer, request_hash
 
 from .tools import bytes
-
+1
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(process)d %(levelname)s %(module)s - %(funcName)s: %(message)s",
@@ -411,7 +412,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         )
 
     def _file(self, request, environ, uid):
-        cache = WorkerCache(HashClient(MEMCACHED))
+        cache = CacheMaintainer(HashClient(MEMCACHED))
         rq_hash = request_hash(request)
         log_file = os.path.join(self.logdir, f"{uid}.log")
         LOG.info(f'File request for {rq_hash} with uid {uid}')
