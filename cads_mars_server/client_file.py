@@ -166,12 +166,7 @@ class RemoteMarsClientSession:
 
         logfile = None
 
-        try:
-            r = requests.get(self.url + "/" + uid)
-            r.raise_for_status()
-            logfile = r.text
-        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
-            self.log.exception("Error getting log file")
+        self.get(uid)  # to get the final log message
 
         try:
             r = requests.delete(self.url + "/" + uid)
@@ -181,7 +176,14 @@ class RemoteMarsClientSession:
             self.log.exception("Error deleting log file")
 
         return Result(error=error, message=logfile or str(error), data=res)
-
+    def get(self, key):
+        try:
+            r = requests.get(self.url + "/" + key)
+            r.raise_for_status()
+            return Result(data=json.loads(r.text))
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
+            self.log.exception("Error getting log file")
+            return Result(error=str(e))
     def __del__(self):
         try:
             if self.uid is not None:
