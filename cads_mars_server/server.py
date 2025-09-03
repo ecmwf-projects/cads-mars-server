@@ -411,8 +411,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total/elapsed)}, chunks: {count:,}"
         )
 
-    def _file(self, request, environ, uid):
-        cache = CacheMaintainer(HashClient(MEMCACHED))
+    def _file(self, request, environ, uid, cache_mantainer:CacheMaintainer=CacheMaintainer(HashClient(MEMCACHED))):
+        cache = cache_mantainer
         rq_hash = request_hash(request)
         log_file = os.path.join(self.logdir, f"{uid}.log")
         LOG.info(f'File request for {rq_hash} with uid {uid}')
@@ -484,6 +484,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 LOG.info(f'Cached request {rq_hash} for request {uid}')
                 if os.path.exists(out_file) and os.stat(out_file).st_size == _cache['size']:
                     LOG.info(f'Cached file {out_file} found')
+                    _cache.update({'access': _cache.get('access', 0) + 1})
+                    cache.set(rq_hash, _cache)
                     if not os.path.exists(log_file):
                         with open(log_file, 'w') as _f:
                             _f.write('File returned from cads_mars_server cache')
@@ -496,13 +498,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 else:
                     LOG.info(f'Cached file not found at {out_file} resubmitting request')
                     cache.delete(rq_hash)
-                return self._file(request, environ, uid)
+                return self._file(request, environ, uid, cache_mantainer=cache)
             elif _cache['status'] == 'FAILED':
                 LOG.info(f'Cached request {rq_hash} for request {uid} failed')
                 cache.delete(rq_hash)
                 if _cache['target']:
                     os.unlink(_cache['target'])
-                return self._file(request, environ, uid)
+                return self._file(request, environ, uid, cache_mantainer=cache)
                 
         else:
             out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], CACHE_FOLDER, f'{rq_hash}.grib')
