@@ -165,8 +165,11 @@ class RemoteMarsClientSession:
                 error = e
 
         logfile = None
-
-        self.get(uid)  # to get the final log message
+        try:
+            self.get(uid)  # to get the final log message
+        except Exception as e:
+            self.log.exception(f"Error getting log file for {uid} from {self.url}")
+            logfile = str(e)
 
         try:
             r = requests.delete(self.url + "/" + uid)
