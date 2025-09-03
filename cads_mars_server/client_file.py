@@ -166,7 +166,8 @@ class RemoteMarsClientSession:
 
         logfile = None
         try:
-            self.get(uid)  # to get the final log message
+            logfile = self.get(uid)  # to get the final log message
+            self.log.info(f"Log file for {uid} from {self.url}: {logfile}")
         except Exception as e:
             self.log.exception(f"Error getting log file for {uid} from {self.url}")
             logfile = str(e)
