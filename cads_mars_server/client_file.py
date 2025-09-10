@@ -49,6 +49,7 @@ class RemoteMarsClientSession:
             remote_config = json.loads(header_rq.headers.get('CACHE_CONFIG', '{}'))
             self.log.debug(f"Remote config {remote_config}")
             if remote_config: # and all(_ in remote_config['SHARES'] for _ in self.config['SHARES']):
+                assert set(remote_config.get('SHARES', [])) >= set(self.config['SHARES']), f"Remote shares {remote_config.get('SHARES', [])} do not cover local shares {self.config['SHARES']}"
                 r = requests.post(
                     self.url,
                     json=dict(
@@ -66,6 +67,9 @@ class RemoteMarsClientSession:
             return Result(error=e, retry_next_host=True)
         except requests.exceptions.ConnectionError as e:
             self.log.error(f"Connection error {e}")
+            return Result(error=e, retry_next_host=True)
+        except AssertionError as e:
+            self.log.error(f"Configuration error {e}")
             return Result(error=e, retry_next_host=True)
         try:
             r.raise_for_status()
@@ -91,10 +95,10 @@ class RemoteMarsClientSession:
                 self.log.error(f"MARS client kill by signal {signal}")
 
             if "X-MARS-RETRY-SAME-HOST" in r.headers:
-                retry_same_host = int(r.headers["X-MARS-RETRY-SAME-HOST"])
+                retry_same_host = bool(int(r.headers["X-MARS-RETRY-SAME-HOST"]))
 
             if "X-MARS-RETRY-NEXT-HOST" in r.headers:
-                retry_next_host = int(r.headers["X-MARS-RETRY-NEXT-HOST"])
+                retry_next_host = bool(int(r.headers["X-MARS-RETRY-NEXT-HOST"]))
             if "X-DATA" in r.headers:
                 data = json.loads(r.headers["X-DATA"])
 
@@ -117,15 +121,16 @@ class RemoteMarsClientSession:
             try:
                 res = json.loads(r.headers['X-DATA'])
             except:
-                self.log.debug(r.headers, exception=True)
+                self.log.debug(r.headers, exc_info=True)
             if not res:
                 return Result(error=error, retry_same_host=True, retry_next_host=True, message='No result presented')
             try:
                 if 'target' in res:
                     target = local_target(res)
+                    self.log.debug(res)
                     while res['status'] in ('QUEUED', 'RUNNING', ):
                         time.sleep(.5)
-                        return self.execute()
+                        return Result(error=error, retry_same_host=True, retry_next_host=False, message=str(res))
                     
                     if res['status'] == 'COMPLETED':
                         if target.startswith('http'):
@@ -253,6 +258,12 @@ class RemoteMarsClientCluster:
         messages = []
 
         for r in requests:
+            try:
+                req.update(r)
+            except Exception as e:
+                print(f"Error updating request with {r}: {e}")
+                raise
+            
             req.update(r)
 
             result = self._execute(

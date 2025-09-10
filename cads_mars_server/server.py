@@ -38,7 +38,7 @@ SHARES = config['SHARES']
 
 CACHE_FOLDER = config['CACHE_FOLDER']
 MEMCACHED = config['MEMCACHED']
-
+DOWNLOAD_SERVERS = config['DOWNLOAD_SERVERS']
 
 def validate_uuid(uid):
     return re.match(r"^[a-f0-9-]{36}$", uid)
@@ -507,13 +507,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self._file(request, environ, uid, cache_mantainer=cache)
                 
         else:
-            out_file = os.path.join(CACHE_ROOT, random.sample(SHARES, 1)[0], CACHE_FOLDER, f'{rq_hash}.grib')
+            out_file = os.path.join(CACHE_ROOT, cache.least_used_share(), CACHE_FOLDER, f'{rq_hash}.grib')
             _cache = dict(
                 status='QUEUED',
                 host=os.uname().nodename.split('.')[0],
                 mars=CACHE_FOLDER,
                 share=out_file.split('/')[-3],
                 target=out_file,
+                download_servers=config['DOWNLOAD_SERVERS'],
                 access=0
             )
             run = True

@@ -180,10 +180,10 @@ class RemoteMarsClientSession:
                 self.log.error(f"MARS client kill by signal {signal}")
 
             if "X-MARS-RETRY-SAME-HOST" in r.headers:
-                retry_same_host = int(r.headers["X-MARS-RETRY-SAME-HOST"])
+                retry_same_host = bool(int(r.headers["X-MARS-RETRY-SAME-HOST"]))
 
             if "X-MARS-RETRY-NEXT-HOST" in r.headers:
-                retry_next_host = int(r.headers["X-MARS-RETRY-NEXT-HOST"])
+                retry_next_host = bool(int(r.headers["X-MARS-RETRY-NEXT-HOST"]))
 
             return Result(
                 error=error,
