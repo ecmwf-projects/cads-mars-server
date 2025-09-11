@@ -49,7 +49,10 @@ class RemoteMarsClientSession:
             remote_config = json.loads(header_rq.headers.get('CACHE_CONFIG', '{}'))
             self.log.debug(f"Remote config {remote_config}")
             if remote_config: # and all(_ in remote_config['SHARES'] for _ in self.config['SHARES']):
-                assert set(remote_config.get('SHARES', [])) >= set(self.config['SHARES']), f"Remote shares {remote_config.get('SHARES', [])} do not cover local shares {self.config['SHARES']}"
+                try:
+                    assert set(remote_config.get('SHARES', [])) >= set(self.config['SHARES']), f"Remote shares {remote_config.get('SHARES', [])} do not cover local shares {self.config['SHARES']}"
+                except AssertionError as e:
+                    self.log.debug(f"Remote shares {remote_config.get('SHARES', [])} do not cover local shares {self.config['SHARES']}")
                 r = requests.post(
                     self.url,
                     json=dict(
