@@ -465,10 +465,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 LOG.info(f'Request for {rq_hash} is already running on {_cache["host"]}')
                 if _cache['host'] == os.uname().nodename.split('.')[0]:
                     try:
-                        assert psutil.pid_exists(_cache['pid']), f'Process for mars.bin expected with pid {_cache["pid"]}, but not found'
+                        assert psutil.pid_exists(_cache['pid']) or _cache['host'] != os.uname().nodename.split('.')[0], f'Process for mars.bin expected with pid {_cache["pid"]}, but not found'
                     except AssertionError as e:
                         LOG.error(e)
-                        cache.delete(rq_hash)
+                        cache.delete(rq_hash, _cache)
                         if _cache['target']:
                             if os.path.exists(_cache['target']):
                                 os.unlink(_cache['target'])
@@ -505,7 +505,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if _cache['target']:
                     os.unlink(_cache['target'])
                 return self._file(request, environ, uid, cache_mantainer=cache)
-                
+
         else:
             out_file = os.path.join(CACHE_ROOT, cache.least_used_share(), CACHE_FOLDER, f'{rq_hash}.grib')
             _cache = dict(
