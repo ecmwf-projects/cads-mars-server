@@ -494,14 +494,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 elif os.path.exists(out_file):
                     LOG.info(f'Cached file {out_file} found but size is not the one reported deleting and ')
                     os.unlink(out_file)
-                    cache.delete(rq_hash)
+                    cache.delete(rq_hash, _cache)
                 else:
                     LOG.info(f'Cached file not found at {out_file} resubmitting request')
-                    cache.delete(rq_hash)
+                    cache.delete(rq_hash, _cache)
                 return self._file(request, environ, uid, cache_mantainer=cache)
             elif _cache['status'] == 'FAILED':
                 LOG.info(f'Cached request {rq_hash} for request {uid} failed')
-                cache.delete(rq_hash)
+                cache.delete(rq_hash, _cache)
                 if _cache['target']:
                     os.unlink(_cache['target'])
                 return self._file(request, environ, uid, cache_mantainer=cache)
@@ -546,6 +546,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     break
                 if time.time() - t0 > 40:
                     send_header(200, _cache, retry_same_host=True, retry_next_host=False)
+                # We check if the process is still running
+                try:
+                    assert psutil.pid_exists(pid)
+                except psutil.NoSuchProcess or AssertionError:
+                    cache.delete(rq_hash, _cache)
+                    send_header(200, _cache, retry_same_host=False, retry_next_host=True)
                 time.sleep(.004)
             total = 0
             t0 = time.time()
