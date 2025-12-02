@@ -33,6 +33,7 @@ readme = "README.md"
 
 [project.scripts]
 cads-mars-server = "cads_mars_server.__main__:mars_cli"
+ws-mars-server = "cads_mars_server.ws_main:main"
 
 [tool.coverage.run]
 branch = true

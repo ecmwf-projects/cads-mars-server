@@ -8,6 +8,7 @@ import subprocess
 import threading
 from pathlib import Path
 from cads_mars_server.server import tidy
+import setproctitle
 
 import websockets
 
@@ -79,8 +80,11 @@ async def handle_client(websocket):
                 workdir = SHARED_ROOT / target_dir
                 log.info(f"Request received: {requests} {environ} to be executed in {workdir}")
                 result_file = SHARED_ROOT / target_file
+                try:
+                    assert os.path.exists(workdir), f"Workdir {workdir} does not exist"
+                except AssertionError as exc:
+                    raise Exception(str(exc))
 
-                assert os.path.exists(workdir), f"Workdir {workdir} does not exist"
                 assert 'request_id' in environ, "Missing request_id in environ"
                 assert 'user_id' in environ, "Missing user_id in environ"
                 assert 'namespace' in environ, "Missing namespace in environ"
@@ -88,6 +92,9 @@ async def handle_client(websocket):
                 assert 'username' in environ, "Missing username in environ"
 
                 job_id = environ.get("request_id")
+
+                setproctitle.setproctitle(f"cads_mars_server {job_id}")
+
                 request_file = workdir / f'{job_id}.mars'
                 target_file = workdir / 'data.grib'
 
@@ -125,7 +132,7 @@ async def handle_client(websocket):
                 # Launch mars binary via same logic as your server
                 proc = subprocess.Popen(
                     ["mars", str(request_file), '2>&1'],
-                    cwd=str(workdir),
+                    #cwd=str(workdir),
                     env=env,
                     stdout=slave_fd,
                     stderr=slave_fd,
@@ -143,16 +150,18 @@ async def handle_client(websocket):
                 def stream_logs():
                     try:
                         with os.fdopen(master_fd) as f:
-                            for line in f:
-                                line = line.rstrip("\n")
-                                log.debug(line)
-                                loop.call_soon_threadsafe(
-                                    asyncio.create_task,
-                                    websocket.send(json.dumps({
-                                        "type": "log",
-                                        "line": line
-                                    }))
-                                )
+                            with open(f"/var/log/cds/requests/{job_id}.log", "w") as _log:
+                                for line in f:
+                                    _log.write(line)
+                                    line = line.rstrip("\n")
+                                    log.debug(line)
+                                    loop.call_soon_threadsafe(
+                                        asyncio.create_task,
+                                        websocket.send(json.dumps({
+                                            "type": "log",
+                                            "line": line
+                                        }))
+                                    )
                     except OSError as exc:
                         # OSError 5 = Input/output error (PTY closed) → safe to ignore
                         if exc.errno != 5:
