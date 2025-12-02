@@ -8,15 +8,13 @@ import threading
 from pathlib import Path
 from cads_mars_server.server import tidy
 
-from fastapi import requests
-
 import websockets
 
 log = logging.getLogger("ws-mars")
 log.setLevel(logging.INFO)
 
 # Shared filesystem root as seen by the **server**
-SHARED_ROOT = Path("/cache")
+
 
 async def handle_client(websocket):
     """
@@ -29,6 +27,7 @@ async def handle_client(websocket):
             {"type": "log", "line": "..."}
             {"type": "state", "status": "...", ...}
     """
+    SHARED_ROOT = Path("/cache")
 
     proc = None
     job_id = None
@@ -56,9 +55,10 @@ async def handle_client(websocket):
                 requests = requests if isinstance(requests, list) else [requests]
 
                 environ = msg.get("environ", {})
-                target_dir = msg.get("target_dir", "")
-                workdir = Path(SHARED_ROOT, target_dir).resolve()
-                result_file = Path(target_dir) / 'data.grib'
+                target_dir = Path(msg.get("target_dir", "")).relative_to("/")
+                workdir = SHARED_ROOT / target_dir
+                print(f"Workdir: {workdir}")
+                result_file = target_dir / 'data.grib'
 
                 assert os.path.exists(workdir), f"Workdir {workdir} does not exist"
                 assert 'request_id' in environ, "Missing request_id in environ"
@@ -144,7 +144,7 @@ async def handle_client(websocket):
                 "status": "finished",
                 "returncode": rc,
                 "job_id": job_id,
-                "result": result_file if rc == 0 else None,
+                "result": str(result_file) if rc == 0 else None,
             }))
             return
 

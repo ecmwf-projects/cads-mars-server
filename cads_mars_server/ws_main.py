@@ -1,7 +1,11 @@
 import asyncio
 from cads_mars_server.ws_server import start_ws_server
 
+async def main():
+    server = await start_ws_server()
+    # server is a Serve object; entering the context keeps it running
+    async with server:
+        await asyncio.Future()  # run forever
+
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    server = loop.run_until_complete(start_ws_server())
-    loop.run_forever()
+    asyncio.run(main())

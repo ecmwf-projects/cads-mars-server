@@ -5,9 +5,6 @@ import os
 import random
 import socket
 import time
-import asyncio
-import websockets
-from pathlib import Path
 
 import requests
 import setproctitle
@@ -355,42 +352,3 @@ class RemoteMarsClientCluster:
             setproctitle.setproctitle(saved)
 
         return reply
-
-async def mars_via_ws(ws_url, requests, environ, target_dir="/mnt/shared"):
-    """
-    Executes a MARS request using the new websocket channel.
-    Returns:
-        (output_file_path, logs, returncode)
-    """
-
-    logs = []
-    output_file = None
-    returncode = None
-
-    async with websockets.connect(ws_url) as ws:
-        # Start job
-        await ws.send(json.dumps({"cmd": "start", "requests": request_payload}))
-
-        async for raw in ws:
-            msg = json.loads(raw)
-            t = msg.get("type")
-
-            if t == "log":
-                logs.append(msg["line"])
-
-            elif t == "state":
-                status = msg.get("status")
-
-                if status == "started":
-                    rel = msg["relative_output"]
-                    output_file = str(Path(shared_mount) / rel)
-
-                elif status == "finished":
-                    returncode = msg["returncode"]
-                    break
-
-                elif status == "killed":
-                    returncode = -9
-                    break
-
-    return output_file, logs, returncode
