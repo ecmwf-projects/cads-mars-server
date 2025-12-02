@@ -23,7 +23,7 @@ async def mars_via_ws(ws_url, requests, environ, target_dir="/download-cci1-0007
             t = msg.get("type")
 
             if t == "log":
-                print(msg["line"], end="")
+                #print(msg["line"], end="\n")
                 logs.append(msg["line"])
 
             elif t == "state":
@@ -56,7 +56,7 @@ if __name__ == "__main__":
         'expect': ['any'],
         'number': ['all'],
         'levtype': ['sfc'],
-        'date': ['2024-09-08']
+        'date': ['20240908/to/20240920']
     }
     environ = {
         'user_id': '37b6b138-0224-4875-b5c5-a3db813b6b01',
@@ -69,6 +69,6 @@ if __name__ == "__main__":
         mars_via_ws(ws_url, [request], environ, target_dir="/download-cci1-0006/")
     )
 
-    print("\n".join(logs))
-    #print(f"Output file: {output_file}")
+    #print("\n".join(logs))
+    print(f"Output file: {output_file}")
     print(f"Return code: {returncode}")

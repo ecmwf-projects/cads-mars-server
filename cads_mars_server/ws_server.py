@@ -12,7 +12,7 @@ from cads_mars_server.server import tidy
 import websockets
 
 log = logging.getLogger("ws-mars")
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.DEBUG if os.getenv("MARS_WS_DEBUG") == "1" else logging.INFO)
 
 # Shared filesystem root as seen by the **server**
 
@@ -120,8 +120,8 @@ async def handle_client(websocket):
                     try:
                         with os.fdopen(master_fd) as f:
                             for line in f:
-                                #line = line.rstrip("\n")
-                                log.debug(line.rstrip("\n"))
+                                line = line.rstrip("\n")
+                                log.debug(line)
                                 loop.call_soon_threadsafe(
                                     asyncio.create_task,
                                     websocket.send(json.dumps({
@@ -151,7 +151,7 @@ async def handle_client(websocket):
                                 "type": "state",
                                 "status": "finished",
                                 "returncode": rc,
-                                "result": result_file,
+                                "result": str(result_file),
                                 "job_id": job_id,
                             }))
                         )
@@ -197,10 +197,17 @@ async def handle_client(websocket):
             }))
             return
 
+    except websockets.exceptions.ConnectionClosedOK:
+        # Normal closure (client and server both sent Close 1000)
+        log.debug("WebSocket closed normally (1000).")
+        pass
+
+    except websockets.exceptions.ConnectionClosedError as exc:
+        # Abnormal close (not 1000)
+        log.warning("WebSocket closed unexpectedly: %s", exc)
+
     except Exception as exc:
         log.error("WebSocket session failed: %s", exc)
-        if proc and proc.poll() is None:
-            proc.terminate()
 
 
 def start_ws_server(host="0.0.0.0", port=9001):
