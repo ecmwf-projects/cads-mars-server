@@ -120,7 +120,8 @@ async def handle_client(websocket):
                     try:
                         with os.fdopen(master_fd) as f:
                             for line in f:
-                                line = line.rstrip("\n")
+                                #line = line.rstrip("\n")
+                                log.debug(line.rstrip("\n"))
                                 loop.call_soon_threadsafe(
                                     asyncio.create_task,
                                     websocket.send(json.dumps({
@@ -128,9 +129,12 @@ async def handle_client(websocket):
                                         "line": line
                                     }))
                                 )
-                    except Exception as exc:
+                    except OSError as exc:
+                        # OSError 5 = Input/output error (PTY closed) → safe to ignore
                         if exc.errno != 5:
-                            log.error("log streaming thread failed: %s", exc)
+                            log.error("Unexpected PTY error: %s", exc)
+                        else:
+                            return
 
                 threading.Thread(target=stream_logs, daemon=True).start()
 
