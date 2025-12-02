@@ -1,0 +1,164 @@
+import asyncio
+import json
+import logging
+import os
+import signal
+import subprocess
+import threading
+from pathlib import Path
+from cads_mars_server.server import tidy
+
+from fastapi import requests
+
+import websockets
+
+log = logging.getLogger("ws-mars")
+log.setLevel(logging.INFO)
+
+# Shared filesystem root as seen by the **server**
+SHARED_ROOT = Path("/cache")
+
+async def handle_client(websocket):
+    """
+    Protocol:
+        Client → Server:
+            {"cmd": "start", "requests": [...], "environ": {...}, "target_dir": "..."}
+            {"cmd": "kill"}
+
+        Server → Client:
+            {"type": "log", "line": "..."}
+            {"type": "state", "status": "...", ...}
+    """
+
+    proc = None
+    job_id = None
+    workdir = None
+
+    try:
+        async for raw in websocket:
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                await websocket.send(json.dumps({
+                    "type": "state",
+                    "status": "error",
+                    "error": "Invalid JSON"
+                }))
+                continue
+
+            cmd = msg.get("cmd")
+
+            # -------------------------
+            # START JOB
+            # -------------------------
+            if cmd == "start":
+                requests = msg.get("requests", [{}])
+                requests = requests if isinstance(requests, list) else [requests]
+
+                environ = msg.get("environ", {})
+                target_dir = msg.get("target_dir", "")
+                workdir = Path(SHARED_ROOT, target_dir).resolve()
+                result_file = Path(target_dir) / 'data.grib'
+
+                assert os.path.exists(workdir), f"Workdir {workdir} does not exist"
+                assert 'request_id' in environ, "Missing request_id in environ"
+                assert 'user_id' in environ, "Missing user_id in environ"
+                assert 'namespace' in environ, "Missing namespace in environ"
+                assert 'host' in environ, "Missing host in environ"
+                assert 'username' in environ, "Missing username in environ"
+
+                job_id = environ.get("request_id")
+                request_file = workdir / f'{job_id}.mars'
+                target_file = workdir / 'data.grib'
+
+                # Build request.json used by your current HTTP server
+                with open(request_file, "w") as f:
+                    for request in requests:
+                        f.write("RETRIEVE,\n")
+                        for key, value in request.items():
+                            if key.lower() != 'target':
+                                f.write("{0}={1},\n".format(key, tidy(value)))
+                        f.write(f"TARGET='{target_file}'\n")
+
+                # Inform client
+                await websocket.send(json.dumps({
+                    "type": "state",
+                    "status": "started",
+                    "job_id": job_id
+                }))
+
+                # Launch mars binary via same logic as your server
+                proc = subprocess.Popen(
+                    ["mars", str(request_file)],
+                    cwd=str(workdir),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
+
+                # Spawn thread for streaming logs
+                def stream_logs():
+                    try:
+                        for line in proc.stdout:
+                            asyncio.run(
+                                websocket.send(json.dumps({
+                                    "type": "log",
+                                    "line": line.rstrip("\n")
+                                }))
+                            )
+                    except Exception as exc:
+                        log.error("Error streaming logs: %s", exc)
+
+                t = threading.Thread(target=stream_logs, daemon=True)
+                t.start()
+
+            # -------------------------
+            # KILL JOB
+            # -------------------------
+            elif cmd == "kill":
+                if proc and proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        os.unlink(request_file)
+                        os.unlink(result_file)
+                    except FileNotFoundError:
+                        pass
+                    await websocket.send(json.dumps({
+                        "type": "state",
+                        "status": "killed",
+                        "job_id": job_id,
+                    }))
+                else:
+                    await websocket.send(json.dumps({
+                        "type": "state",
+                        "status": "error",
+                        "error": "No running job",
+                    }))
+
+        # EXIT LOOP → JOB FINISHED
+        if proc:
+            rc = proc.wait()
+            await websocket.send(json.dumps({
+                "type": "state",
+                "status": "finished",
+                "returncode": rc,
+                "job_id": job_id,
+                "result": result_file if rc == 0 else None,
+            }))
+            return
+
+    except Exception as exc:
+        log.error("WebSocket session failed: %s", exc)
+        if proc and proc.poll() is None:
+            proc.terminate()
+
+
+def start_ws_server(host="0.0.0.0", port=9001):
+    """
+    Start the WebSocket server. Called from __main__.
+    """
+    logging.basicConfig(level=logging.INFO)
+    log.info(f"Starting MARS WebSocket server on ws://{host}:{port}")
+
+    return websockets.serve(handle_client, host, port)
