@@ -97,9 +97,9 @@ async def mars_via_ws(server_list, requests, environ, target):
     raise RuntimeError("All servers unreachable after retries")
 
 
-def mars_via_ws_sync(server_list, request_payload, environ, target_dir):
+def mars_via_ws_sync(server_list, request_payload, environ, target):
     logs, returncode = asyncio.run(
-        mars_via_ws(server_list, request_payload, environ, target_dir)
+        mars_via_ws(server_list, request_payload, environ, target)
     )
     return {'message': logs, 'returncode': returncode}
 
