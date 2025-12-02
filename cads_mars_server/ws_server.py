@@ -11,7 +11,7 @@ from cads_mars_server.server import tidy
 import websockets
 
 log = logging.getLogger("ws-mars")
-log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 
 # Shared filesystem root as seen by the **server**
 
@@ -59,7 +59,7 @@ async def handle_client(websocket):
                 environ = msg.get("environ", {})
                 target_dir = Path(msg.get("target_dir", "")).relative_to("/")
                 workdir = SHARED_ROOT / target_dir
-                print(f"Workdir: {workdir}")
+                log.info(f"Request received: {requests} {environ} to be executed in {workdir}")
                 result_file = target_dir / 'data.grib'
 
                 assert os.path.exists(workdir), f"Workdir {workdir} does not exist"
@@ -81,6 +81,8 @@ async def handle_client(websocket):
                             if key.lower() != 'target':
                                 f.write("{0}={1},\n".format(key, tidy(value)))
                         f.write(f"TARGET='{target_file}'\n")
+                
+                log.info(f"Written request file {request_file}")
 
                 # Inform client
                 await websocket.send(json.dumps({
@@ -91,7 +93,7 @@ async def handle_client(websocket):
 
                 # Launch mars binary via same logic as your server
                 proc = subprocess.Popen(
-                    ["mars", str(request_file)],
+                    ["mars", str(request_file), '2>&1'],
                     cwd=str(workdir),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,

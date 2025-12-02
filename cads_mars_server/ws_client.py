@@ -67,7 +67,7 @@ if __name__ == "__main__":
         'username': 'cci1:dev-pool:a3db813b6b01'
     }
     output_file, logs, returncode = asyncio.run(
-        mars_via_ws(ws_url, [request], environ, target_dir="/download-cci1-0007/")
+        mars_via_ws(ws_url, [request], environ, target_dir="/download-cci1-0006/")
     )
 
     print("\n".join(logs))
