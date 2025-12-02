@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import signal
+import pty
 import subprocess
 import threading
 from pathlib import Path
@@ -91,6 +92,12 @@ async def handle_client(websocket):
                     "job_id": job_id
                 }))
 
+                
+                # ---------------------------------------------------
+                # PTY — critical for real-time logs
+                # ---------------------------------------------------
+                master_fd, slave_fd = pty.openpty()
+
                 # Launch mars binary via same logic as your server
                 proc = subprocess.Popen(
                     ["mars", str(request_file), '2>&1'],
@@ -101,20 +108,25 @@ async def handle_client(websocket):
                     bufsize=1,
                 )
 
-                # Spawn thread for streaming logs
+                os.close(slave_fd)
+
+                # ---------------------------------------------------
+                # THREAD: stream mars logs -> websocket
+                # ---------------------------------------------------
                 def stream_logs():
                     try:
-                        for line in proc.stdout:
-                            # schedule coroutine on the real event loop
-                            loop.call_soon_threadsafe(
-                                asyncio.create_task,
-                                websocket.send(json.dumps({
-                                    "type": "log",
-                                    "line": line.rstrip("\n")
-                                }))
-                            )
+                        with os.fdopen(master_fd) as f:
+                            for line in f:
+                                line = line.rstrip("\n")
+                                loop.call_soon_threadsafe(
+                                    asyncio.create_task,
+                                    websocket.send(json.dumps({
+                                        "type": "log",
+                                        "line": line
+                                    }))
+                                )
                     except Exception as exc:
-                        log.error("Error streaming logs: %s", exc)
+                        log.error("log streaming thread failed: %s", exc)
 
                 threading.Thread(target=stream_logs, daemon=True).start()
 
