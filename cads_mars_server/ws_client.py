@@ -14,7 +14,7 @@ MAX_RETRIES = 10
 REQUEST_TIMEOUT = 30
 
 
-async def mars_via_ws(server_list, requests, environ, target_dir):
+async def mars_via_ws(server_list, requests, environ, target):
     """
     server_list: list of ws://host:port
     request_payload: mars request (your JSON)
@@ -46,7 +46,7 @@ async def mars_via_ws(server_list, requests, environ, target_dir):
                         "cmd": "start",
                         "requests": requests,
                         "environ": environ,
-                        "target_dir": target_dir
+                        "target": target
                     }))
 
                     # ---------------------------
@@ -69,10 +69,14 @@ async def mars_via_ws(server_list, requests, environ, target_dir):
                             if msg["status"] == "started":
                                 continue
 
+                            if msg["status"] == "error":
+                                logs.append(f"Error from server: {msg['error']}")
+                                print(f"Error from server: {msg['error']}")
+                                assert False, f"Server error: {msg['error']}"
+
                             if msg["status"] == "finished":
-                                result_file = msg["result"]
                                 returncode = msg["returncode"]
-                                return result_file, logs, returncode
+                                return target, logs, returncode
 
                             if msg["status"] == "killed":
                                 return None, logs, -9
@@ -94,9 +98,10 @@ async def mars_via_ws(server_list, requests, environ, target_dir):
 
 
 def mars_via_ws_sync(server_list, request_payload, environ, target_dir):
-    return asyncio.run(
+    result_file, logs, returncode = asyncio.run(
         mars_via_ws(server_list, request_payload, environ, target_dir)
     )
+    return {'result_file': result_file, 'message': logs, 'returncode': returncode}
 
 if __name__ == "__main__":
     import os
@@ -121,7 +126,7 @@ if __name__ == "__main__":
         'username': 'cci1:dev-pool:a3db813b6b01'
     }
     output_file, logs, returncode = asyncio.run(
-        mars_via_ws(ws_url, requests, environ, target_dir="/download-cci1-0006/")
+        mars_via_ws(ws_url, requests, environ, target="/download-cci1-0006/foo.grib")
     )
 
     #print("\n".join(logs))

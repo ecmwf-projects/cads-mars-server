@@ -25,7 +25,7 @@ async def handle_client(websocket):
     """
     Protocol:
         Client → Server:
-            {"cmd": "start", "requests": [...], "environ": {...}, "target_dir": "..."}
+            {"cmd": "start", "requests": [...], "environ": {...}, "target": "..."}
             {"cmd": "kill"}
 
         Server → Client:
@@ -74,10 +74,11 @@ async def handle_client(websocket):
                 requests = requests if isinstance(requests, list) else [requests]
 
                 environ = msg.get("environ", {})
-                target_dir = Path(msg.get("target_dir", "")).relative_to("/")
+                target_file = Path(msg.get("target", "")).relative_to("/")
+                target_dir = target_file.parent
                 workdir = SHARED_ROOT / target_dir
                 log.info(f"Request received: {requests} {environ} to be executed in {workdir}")
-                result_file = target_dir / 'data.grib'
+                result_file = SHARED_ROOT / target_file
 
                 assert os.path.exists(workdir), f"Workdir {workdir} does not exist"
                 assert 'request_id' in environ, "Missing request_id in environ"
@@ -106,7 +107,6 @@ async def handle_client(websocket):
                     "type": "state",
                     "status": "started",
                     "job_id": job_id,
-                    "result": str(target_file)
                 }))
 
                 
@@ -167,7 +167,6 @@ async def handle_client(websocket):
                                 "type": "state",
                                 "status": "finished",
                                 "returncode": rc,
-                                "result": str(result_file),
                                 "job_id": job_id,
                             }))
                         )
@@ -208,10 +207,16 @@ async def handle_client(websocket):
                 "type": "state",
                 "status": "finished",
                 "returncode": rc,
-                "job_id": job_id,
-                "result": str(result_file) if rc == 0 else None,
+                "job_id": job_id
             }))
             return
+    except AssertionError as exc:
+        log.error("Assertion error: %s", exc)
+        await websocket.send(json.dumps({
+            "type": "state",
+            "status": "error",
+            "error": str(exc),
+        }))
 
     except websockets.exceptions.ConnectionClosedOK:
         # Normal closure (client and server both sent Close 1000)
