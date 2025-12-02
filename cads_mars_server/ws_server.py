@@ -33,6 +33,8 @@ async def handle_client(websocket):
     job_id = None
     workdir = None
 
+    loop = asyncio.get_running_loop()
+
     try:
         async for raw in websocket:
             try:
@@ -101,7 +103,9 @@ async def handle_client(websocket):
                 def stream_logs():
                     try:
                         for line in proc.stdout:
-                            asyncio.run(
+                            # schedule coroutine on the real event loop
+                            loop.call_soon_threadsafe(
+                                asyncio.create_task,
                                 websocket.send(json.dumps({
                                     "type": "log",
                                     "line": line.rstrip("\n")
@@ -110,8 +114,7 @@ async def handle_client(websocket):
                     except Exception as exc:
                         log.error("Error streaming logs: %s", exc)
 
-                t = threading.Thread(target=stream_logs, daemon=True)
-                t.start()
+                threading.Thread(target=stream_logs, daemon=True).start()
 
             # -------------------------
             # KILL JOB
