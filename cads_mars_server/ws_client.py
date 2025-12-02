@@ -31,7 +31,7 @@ async def mars_via_ws(ws_url, requests, environ, target_dir="/download-cci1-0007
 
                 if status == "started":
                     rel = msg.get("result")
-                    output_file = str(Path(rel))
+                    output_file = rel
 
                 elif status == "finished":
                     returncode = msg["returncode"]

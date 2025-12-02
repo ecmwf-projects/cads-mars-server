@@ -89,7 +89,8 @@ async def handle_client(websocket):
                 await websocket.send(json.dumps({
                     "type": "state",
                     "status": "started",
-                    "job_id": job_id
+                    "job_id": job_id,
+                    "result": str(target_file)
                 }))
 
                 
@@ -102,10 +103,11 @@ async def handle_client(websocket):
                 proc = subprocess.Popen(
                     ["mars", str(request_file), '2>&1'],
                     cwd=str(workdir),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
+                    stdout=slave_fd,
+                    stderr=slave_fd,
                     text=True,
-                    bufsize=1,
+                    bufsize=0,
+                    close_fds=True,
                 )
 
                 os.close(slave_fd)
@@ -117,12 +119,11 @@ async def handle_client(websocket):
                     try:
                         with os.fdopen(master_fd) as f:
                             for line in f:
-                                line = line.rstrip("\n")
                                 loop.call_soon_threadsafe(
                                     asyncio.create_task,
                                     websocket.send(json.dumps({
                                         "type": "log",
-                                        "line": line
+                                        "line": line.rstrip("\n")
                                     }))
                                 )
                     except Exception as exc:
