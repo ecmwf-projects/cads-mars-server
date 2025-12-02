@@ -138,6 +138,30 @@ async def handle_client(websocket):
 
                 threading.Thread(target=stream_logs, daemon=True).start()
 
+
+                # ---------------------------------------------------
+                # THREAD: detect process end → send finished
+                # ---------------------------------------------------
+                def monitor_process():
+                    rc = proc.wait()
+                    try:
+                        loop.call_soon_threadsafe(
+                            asyncio.create_task,
+                            websocket.send(json.dumps({
+                                "type": "state",
+                                "status": "finished",
+                                "returncode": rc,
+                                "result": result_file,
+                                "job_id": job_id,
+                            }))
+                        )
+                        tidy(workdir)
+                        loop.call_soon_threadsafe(asyncio.create_task, websocket.close())
+                    except Exception as exc:
+                        log.error("Error signaling finished: %s", exc)
+
+                threading.Thread(target=monitor_process, daemon=True).start()
+
             # -------------------------
             # KILL JOB
             # -------------------------
