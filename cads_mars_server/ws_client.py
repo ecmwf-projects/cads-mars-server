@@ -31,7 +31,7 @@ async def mars_via_ws(ws_url, requests, environ, target_dir="/download-cci1-0007
 
                 if status == "started":
                     rel = msg.get("result")
-                    output_file = str(Path(shared_mount))
+                    output_file = str(Path(rel))
 
                 elif status == "finished":
                     returncode = msg["returncode"]
@@ -45,7 +45,6 @@ async def mars_via_ws(ws_url, requests, environ, target_dir="/download-cci1-0007
 
 if __name__ == "__main__":
     import os
-    shared_mount = os.getenv("MARS_SHARED_MOUNT", "/cache")
     ws_url = os.getenv("MARS_WS_URL", "ws://localhost:9001")
 
     # Example usage
