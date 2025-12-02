@@ -14,7 +14,7 @@ MAX_RETRIES = 10
 REQUEST_TIMEOUT = 30
 
 
-async def mars_via_ws(server_list, requests, environ, target):
+async def mars_via_ws(server_list, requests, environ, target, logger=None):
     """
     server_list: list of ws://host:port
     request_payload: mars request (your JSON)
@@ -34,6 +34,8 @@ async def mars_via_ws(server_list, requests, environ, target):
 
     for attempt in range(MAX_RETRIES):
         for ws_url in servers:
+            if logger:
+                logger.info(f"Connecting to MARS server at {ws_url}")
             try:
                 async with websockets.connect(
                     ws_url, ping_interval=None, close_timeout=30
@@ -57,21 +59,32 @@ async def mars_via_ws(server_list, requests, environ, target):
                         mtype = msg.get("type")
 
                         if mtype == "heartbeat":
-                            print(f"Received heartbeat from {ws_url}")
+                            if logger:
+                                logger.info(f"Received heartbeat from {ws_url}")
                             continue
 
                         if mtype == "log":
                             logs.append(msg["line"])
-                            print(msg["line"])
+                            if logger:
+                                logger.info(msg["line"])
+                            else:
+                                print(msg["line"])
                             continue
 
                         if mtype == "state":
                             if msg["status"] == "started":
+                                if logger:
+                                    logger.info(f"Job started on server {ws_url}")
+                                else:
+                                    print(f"Job started on server {ws_url}")
                                 continue
 
                             if msg["status"] == "error":
                                 logs.append(f"Error from server: {msg['error']}")
-                                print(f"Error from server: {msg['error']}")
+                                if logger:
+                                    logger.error(f"Error from server: {msg['error']}")
+                                else:
+                                    print(f"Error from server: {msg['error']}")
                                 assert False, f"Server error: {msg['error']}"
 
                             if msg["status"] == "finished":
@@ -85,21 +98,25 @@ async def mars_via_ws(server_list, requests, environ, target):
                     websockets.exceptions.InvalidStatusCode,
                     ConnectionRefusedError,
                     TimeoutError):
-
-                print(f"Server {ws_url} failed; retrying...")
+                if logger:
+                    logger.warning(f"Server {ws_url} failed; retrying...")
+                else:
+                    print(f"Server {ws_url} failed; retrying...")
                 await asyncio.sleep(RETRY_DELAY)
 
-        print(f"Retry cycle {attempt+1}/{MAX_RETRIES}")
-
+        if logger:
+            logger.info(f"Retry cycle {attempt+1}/{MAX_RETRIES}")
+        else:
+            print(f"Retry cycle {attempt+1}/{MAX_RETRIES}")
     # ---------------------------
     # ALL SERVERS FAILED
     # ---------------------------
     raise RuntimeError("All servers unreachable after retries")
 
 
-def mars_via_ws_sync(server_list, request_payload, environ, target):
+def mars_via_ws_sync(server_list, request_payload, environ, target, logger=None):
     logs, returncode = asyncio.run(
-        mars_via_ws(server_list, request_payload, environ, target)
+        mars_via_ws(server_list, request_payload, environ, target, logger=logger)
     )
     return {'message': logs, 'returncode': returncode}
 
