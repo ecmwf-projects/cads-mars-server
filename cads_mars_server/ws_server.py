@@ -105,6 +105,7 @@ async def handle_client(websocket):
                     cwd=str(workdir),
                     stdout=slave_fd,
                     stderr=slave_fd,
+                    preexec_fn=os.setsid,
                     text=True,
                     bufsize=0,
                     close_fds=True,
@@ -119,15 +120,17 @@ async def handle_client(websocket):
                     try:
                         with os.fdopen(master_fd) as f:
                             for line in f:
+                                line = line.rstrip("\n")
                                 loop.call_soon_threadsafe(
                                     asyncio.create_task,
                                     websocket.send(json.dumps({
                                         "type": "log",
-                                        "line": line.rstrip("\n")
+                                        "line": line
                                     }))
                                 )
                     except Exception as exc:
-                        log.error("log streaming thread failed: %s", exc)
+                        if exc.errno != 5:
+                            log.error("log streaming thread failed: %s", exc)
 
                 threading.Thread(target=stream_logs, daemon=True).start()
 
