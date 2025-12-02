@@ -92,6 +92,12 @@ async def mars_via_ws(server_list, requests, environ, target_dir):
     # ---------------------------
     raise RuntimeError("All servers unreachable after retries")
 
+
+def mars_via_ws_sync(server_list, request_payload, environ, target_dir):
+    return asyncio.run(
+        mars_via_ws(server_list, request_payload, environ, target_dir)
+    )
+
 if __name__ == "__main__":
     import os
     ws_url = [os.getenv("MARS_WS_URL", "ws://localhost:9001")]
