@@ -15,7 +15,11 @@ log = logging.getLogger("ws-mars")
 log.setLevel(logging.DEBUG if os.getenv("MARS_WS_DEBUG") == "1" else logging.INFO)
 
 # Shared filesystem root as seen by the **server**
+SHARED_ROOT = Path("/cache")
 
+# Heartbeat interval to keep LB from killing idle sessions
+HEARTBEAT_INTERVAL = 20      # seconds
+HEARTBEAT_PAYLOAD = json.dumps({"type": "heartbeat"})
 
 async def handle_client(websocket):
     """
@@ -28,13 +32,25 @@ async def handle_client(websocket):
             {"type": "log", "line": "..."}
             {"type": "state", "status": "...", ...}
     """
-    SHARED_ROOT = Path("/cache")
+
+    loop = asyncio.get_running_loop()
 
     proc = None
     job_id = None
     workdir = None
 
-    loop = asyncio.get_running_loop()
+    # -----------------------------------------------------
+    # HEARTBEAT TASK (keep LBs & proxies from closing idle links)
+    # -----------------------------------------------------
+    async def heartbeat_task():
+        try:
+            while True:
+                await asyncio.sleep(HEARTBEAT_INTERVAL)
+                await websocket.send(HEARTBEAT_PAYLOAD)
+        except websockets.exceptions.ConnectionClosed:
+            pass
+
+    hb_task = asyncio.create_task(heartbeat_task())
 
     try:
         async for raw in websocket:
@@ -208,6 +224,13 @@ async def handle_client(websocket):
 
     except Exception as exc:
         log.error("WebSocket session failed: %s", exc)
+
+    finally:
+        hb_task.cancel()
+        if proc and proc.poll() is None:
+            proc.terminate()
+
+
 
 
 def start_ws_server(host="0.0.0.0", port=9001):
