@@ -76,10 +76,10 @@ async def mars_via_ws(server_list, requests, environ, target):
 
                             if msg["status"] == "finished":
                                 returncode = msg["returncode"]
-                                return target, logs, returncode
+                                return logs, returncode
 
                             if msg["status"] == "killed":
-                                return None, logs, -9
+                                return logs, -9
 
             except (websockets.exceptions.ConnectionClosedError,
                     websockets.exceptions.InvalidStatusCode,
@@ -98,10 +98,10 @@ async def mars_via_ws(server_list, requests, environ, target):
 
 
 def mars_via_ws_sync(server_list, request_payload, environ, target_dir):
-    result_file, logs, returncode = asyncio.run(
+    logs, returncode = asyncio.run(
         mars_via_ws(server_list, request_payload, environ, target_dir)
     )
-    return {'result_file': result_file, 'message': logs, 'returncode': returncode}
+    return {'message': logs, 'returncode': returncode}
 
 if __name__ == "__main__":
     import os
@@ -125,10 +125,8 @@ if __name__ == "__main__":
         'host': 'worker-dev-cci1-1',
         'username': 'cci1:dev-pool:a3db813b6b01'
     }
-    output_file, logs, returncode = asyncio.run(
+    logs, returncode = asyncio.run(
         mars_via_ws(ws_url, requests, environ, target="/download-cci1-0006/foo.grib")
     )
 
-    #print("\n".join(logs))
-    print(f"Output file: {output_file}")
     print(f"Return code: {returncode}")

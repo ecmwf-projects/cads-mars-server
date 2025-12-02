@@ -115,10 +115,18 @@ async def handle_client(websocket):
                 # ---------------------------------------------------
                 master_fd, slave_fd = pty.openpty()
 
+                env = os.environ.copy()
+                for k, v in environ.items():
+                    if v is not None:
+                        env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
+
+                env.update({'MARS_AUTO_SPLIT_BY_DATES': '1'})
+
                 # Launch mars binary via same logic as your server
                 proc = subprocess.Popen(
                     ["mars", str(request_file), '2>&1'],
                     cwd=str(workdir),
+                    env=env,
                     stdout=slave_fd,
                     stderr=slave_fd,
                     preexec_fn=os.setsid,
