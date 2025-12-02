@@ -22,7 +22,8 @@ classifiers = [
 dependencies = [
   "click",
   "requests",
-  "setproctitle"
+  "setproctitle",
+  "websockets"
 ]
 description = "A proxy MARS server and client designed for CADS"
 dynamic = ["version"]
