@@ -150,7 +150,7 @@ async def handle_client(websocket):
                 def stream_logs():
                     try:
                         with os.fdopen(master_fd) as f:
-                            with open(f"/var/log/cds/requests/{job_id}.log", "w") as _log:
+                            with open(f"{job_id}.log", "w") as _log:
                                 for line in f:
                                     _log.write(line)
                                     line = line.rstrip("\n")
