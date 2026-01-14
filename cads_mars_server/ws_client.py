@@ -1,17 +1,14 @@
 import json
 import asyncio
 import websockets
-from pathlib import Path
-
-import asyncio
-import websockets
 import json
 import random
-import time
+import signal
 
 RETRY_DELAY = 2
 MAX_RETRIES = 10
 REQUEST_TIMEOUT = 30
+
 
 
 async def mars_via_ws(server_list, requests, environ, target, logger=None):

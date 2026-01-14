@@ -129,10 +129,9 @@ async def handle_client(websocket):
 
                 env.update({'MARS_AUTO_SPLIT_BY_DATES': '1'})
 
-                # Launch mars binary via same logic as your server
+                # Launch mars binary
                 proc = subprocess.Popen(
                     ["mars", str(request_file), '2>&1'],
-                    #cwd=str(workdir),
                     env=env,
                     stdout=slave_fd,
                     stderr=slave_fd,
@@ -238,21 +237,24 @@ async def handle_client(websocket):
     except websockets.exceptions.ConnectionClosedOK:
         # Normal closure (client and server both sent Close 1000)
         log.debug("WebSocket closed normally (1000).")
+        os.unlink(request_file)
         pass
 
     except websockets.exceptions.ConnectionClosedError as exc:
         # Abnormal close (not 1000)
         log.warning("WebSocket closed unexpectedly: %s", exc)
+        os.unlink(request_file)
+        os.unlink(target_file)
 
     except Exception as exc:
         log.error("WebSocket session failed: %s", exc)
+        os.unlink(request_file)
+        os.unlink(target_file)
 
     finally:
         hb_task.cancel()
         if proc and proc.poll() is None:
             proc.terminate()
-
-
 
 
 def start_ws_server(host="0.0.0.0", port=9001):
