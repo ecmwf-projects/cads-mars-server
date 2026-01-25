@@ -288,12 +288,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     LOG.error("Sending error message in header")
                     send_header(status, **kwargs)
                     self.wfile.write(json.dumps(kwargs).encode())
+                    LOG.error(f"Error message sent in stream: {json.dumps(kwargs)}", exc_info=True)
                 else:
                     LOG.error("Sending error message in stream")
                     self.wfile.write("4\r\nEROR\r\n".encode())
                     message = json.dumps(kwargs)
                     self.wfile.write(f"{len(message):x}\r\n{message}\r\n".encode())
                     self.wfile.write("0\r\n\r\n".encode())
+                    
+                    LOG.error(f"Error message sent in stream: {message}", exc_info=True)
 
         elapsed = time.time() - start
         LOG.info(
