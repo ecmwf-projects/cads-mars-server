@@ -32,7 +32,7 @@ async def mars_via_ws(server_list, requests, environ, target, logger=None):
     for attempt in range(MAX_RETRIES):
         for ws_url in servers:
             if logger:
-                logger.info(f"Connecting to MARS server at {ws_url}")
+                logger.info(f"Connecting to websocket-MARS server at {ws_url}")
             try:
                 async with websockets.connect(
                     ws_url, ping_interval=None, close_timeout=30
