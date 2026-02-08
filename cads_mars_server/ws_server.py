@@ -89,19 +89,20 @@ async def handle_client(websocket):
 
             cmd = msg.get("cmd")
 
+            environ = msg.get("environ", {})
+            target_file = Path(msg.get("target", "")).relative_to("/")
+            target_dir = target_file.parent
+            workdir = SHARED_ROOT / target_dir
+            log.info(f"Request received: {requests} {environ} to be executed in {workdir}")
+            result_file = SHARED_ROOT / target_file
+
             # -------------------------
             # START JOB
             # -------------------------
             if cmd == "start":
                 requests = msg.get("requests", [{}])
                 requests = requests if isinstance(requests, list) else [requests]
-
-                environ = msg.get("environ", {})
-                target_file = Path(msg.get("target", "")).relative_to("/")
-                target_dir = target_file.parent
-                workdir = SHARED_ROOT / target_dir
-                log.info(f"Request received: {requests} {environ} to be executed in {workdir}")
-                result_file = SHARED_ROOT / target_file
+                
                 try:
                     assert os.path.exists(workdir), f"Workdir {workdir} does not exist"
                 except AssertionError as exc:
