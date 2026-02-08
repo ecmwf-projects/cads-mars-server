@@ -1,0 +1,92 @@
+# MARS Server Configuration File
+# Default location: /etc/cads-mars-server.yaml
+# Override with: MARS_CONFIG_FILE=/path/to/config.yaml
+
+# Note: Environment variables take precedence over this file
+# For example, MARS_PIPE_PORT=8000 will override pipe_port below
+
+# ============================================================================
+# Server Configuration
+# ============================================================================
+
+# Port for pipe-based HTTP server
+pipe_port: 9000
+
+# Port for WebSocket shares server
+shares_port: 9001
+
+# Shared filesystem root (for WebSocket mode)
+# Must be accessible by both server and client pods
+shared_root: /cache
+
+# ============================================================================
+# WebSocket Configuration
+# ============================================================================
+
+# Heartbeat interval in seconds to keep load balancers from closing idle connections
+# Increase if your load balancer has a longer idle timeout
+heartbeat_interval: 20
+
+# Timeout for websocket close operations in seconds
+ws_close_timeout: 30
+
+# Ping interval for websocket connections (null to disable)
+# ws_ping_interval: null
+
+# ============================================================================
+# Client Configuration
+# ============================================================================
+
+# Delay in seconds between retry attempts
+retry_delay: 2
+
+# Maximum number of retry attempts
+max_retries: 10
+
+# Timeout in seconds for individual server attempts
+# Increase for large data retrievals
+request_timeout: 30
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+
+# Enable debug logging for websocket operations
+# Set to true for troubleshooting
+debug_mode: false
+
+# ============================================================================
+# Client Selection
+# ============================================================================
+
+# Use WebSocket shares client instead of pipe client
+# Set to true when using shared filesystem (CephFS, NFS, etc.)
+# Set to false for traditional pipe-based approach
+use_shares: false
+
+# ============================================================================
+# Example Configurations
+# ============================================================================
+
+# Example 1: Production with shared filesystem
+# use_shares: true
+# shared_root: /mnt/cephfs
+# retry_delay: 3
+# max_retries: 15
+# request_timeout: 60
+# heartbeat_interval: 30
+
+# Example 2: Development environment
+# pipe_port: 9000
+# shares_port: 9001
+# shared_root: /tmp/mars_cache
+# debug_mode: true
+# max_retries: 3
+
+# Example 3: High-reliability production
+# use_shares: true
+# shared_root: /mnt/cephfs
+# retry_delay: 5
+# max_retries: 20
+# request_timeout: 90
+# heartbeat_interval: 45

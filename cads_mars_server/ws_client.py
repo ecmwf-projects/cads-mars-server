@@ -7,10 +7,13 @@ from typing import Any, Iterable
 import websockets
 
 from cads_mars_server.client import Result
-
-RETRY_DELAY = 2
-MAX_RETRIES = 10
-REQUEST_TIMEOUT = 30  # seconds
+from cads_mars_server.config import (
+    RETRY_DELAY,
+    MAX_RETRIES,
+    REQUEST_TIMEOUT,
+    WS_PING_INTERVAL,
+    WS_CLOSE_TIMEOUT,
+)
 
 
 async def _run_one_server(
@@ -25,7 +28,9 @@ async def _run_one_server(
     if logger:
         logger.info(f"Connecting to MARS server at {ws_url}")
 
-    async with websockets.connect(ws_url, ping_interval=None, close_timeout=30) as ws:
+    async with websockets.connect(
+        ws_url, ping_interval=WS_PING_INTERVAL, close_timeout=WS_CLOSE_TIMEOUT
+    ) as ws:
         # SEND START COMMAND
         await ws.send(
             json.dumps(

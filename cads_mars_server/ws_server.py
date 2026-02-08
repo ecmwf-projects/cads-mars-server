@@ -12,15 +12,37 @@ import setproctitle
 
 import websockets
 
+from cads_mars_server.config import (
+    SHARED_ROOT,
+    HEARTBEAT_INTERVAL,
+    WS_CLOSE_TIMEOUT,
+    WS_PING_INTERVAL,
+    DEBUG_MODE,
+)
+
 log = logging.getLogger("ws-mars")
-log.setLevel(logging.DEBUG if os.getenv("MARS_WS_DEBUG") == "1" else logging.INFO)
+log.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
 
-# Shared filesystem root as seen by the **server**
-SHARED_ROOT = Path("/cache")
-
-# Heartbeat interval to keep LB from killing idle sessions
-HEARTBEAT_INTERVAL = 20      # seconds
+# Heartbeat payload
 HEARTBEAT_PAYLOAD = json.dumps({"type": "heartbeat"})
+
+
+def safe_cleanup(*paths):
+    """
+    Safely remove files, logging any issues without raising exceptions.
+    
+    Args:
+        *paths: Variable number of file paths to remove
+    """
+    for path in paths:
+        if path is None:
+            continue
+        try:
+            if os.path.exists(path):
+                os.unlink(path)
+                log.debug(f"Cleaned up: {path}")
+        except Exception as e:
+            log.warning(f"Failed to cleanup {path}: {e}")
 
 async def handle_client(websocket):
     """
@@ -186,7 +208,8 @@ async def handle_client(websocket):
                                 "job_id": job_id,
                             }))
                         )
-                        tidy(workdir)
+                        # Clean up request file after successful completion
+                        safe_cleanup(request_file)
                         loop.call_soon_threadsafe(asyncio.create_task, websocket.close())
                     except Exception as exc:
                         log.error("Error signaling finished: %s", exc)
@@ -199,11 +222,7 @@ async def handle_client(websocket):
             elif cmd == "kill":
                 if proc and proc.poll() is None:
                     proc.terminate()
-                    try:
-                        os.unlink(request_file)
-                        os.unlink(result_file)
-                    except FileNotFoundError:
-                        pass
+                    safe_cleanup(request_file, result_file)
                     await websocket.send(json.dumps({
                         "type": "state",
                         "status": "killed",
@@ -237,19 +256,16 @@ async def handle_client(websocket):
     except websockets.exceptions.ConnectionClosedOK:
         # Normal closure (client and server both sent Close 1000)
         log.debug("WebSocket closed normally (1000).")
-        os.unlink(request_file)
-        pass
+        safe_cleanup(request_file)
 
     except websockets.exceptions.ConnectionClosedError as exc:
         # Abnormal close (not 1000)
         log.warning("WebSocket closed unexpectedly: %s", exc)
-        os.unlink(request_file)
-        os.unlink(target_file)
+        safe_cleanup(request_file, result_file)
 
     except Exception as exc:
         log.error("WebSocket session failed: %s", exc)
-        os.unlink(request_file)
-        os.unlink(target_file)
+        safe_cleanup(request_file, result_file)
 
     finally:
         hb_task.cancel()
