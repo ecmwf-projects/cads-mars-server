@@ -38,6 +38,11 @@ def check_cephfs_health():
     """
     Check CephFS health and report MDS/OSD connection issues.
     Returns dict with health info and warnings.
+    
+    Note: OSD connection errors (like 'osd583 10.106.20.41:6971 socket closed')
+    indicate storage backend issues. These IPs are OSDs (data storage nodes),
+    not monitors from your mount string. You cannot fix OSD issues by changing
+    mount monitors - contact storage team about failing OSDs.
     """
     health_info = {
         "mds_issues": [],
@@ -113,6 +118,11 @@ def check_cephfs_health():
             log.warning(f"Detected {len(unique_osds)} OSDs with connection issues:")
             for (osd, ip), issue in unique_osds.items():
                 log.warning(f"  - OSD {osd} at {ip}: {issue['error']}")
+            log.warning(
+                "NOTE: These are storage backend (OSD) IPs, not mount string monitor IPs. "
+                "Contact storage team about these failing OSDs - "
+                "changing mount monitors will not resolve this issue."
+            )
         
         if health_info["mds_issues"]:
             log.warning(f"Detected {len(health_info['mds_issues'])} MDS issues in logs")
@@ -405,32 +415,9 @@ async def handle_client(websocket):
                     rc = proc.wait()
                     job_running = False  # Mark job as no longer running
                     
-                    # CRITICAL: Ensure output file is flushed to CephFS before signaling completion
-                    # This prevents cache coherency issues when clients on different VMs try to access the file
-                    if rc == 0 and os.path.exists(target_file_path):
-                        try:
-                            file_size = os.path.getsize(target_file_path)
-                            log.info(f"Starting sync of output file {target_file_path} (size: {file_size / 1024 / 1024:.2f} MB)")
-                            sync_start = time.time()
-                            
-                            # Open file and explicitly fsync to flush all data to the filesystem
-                            with open(target_file_path, 'rb') as f:
-                                os.fsync(f.fileno())
-                            
-                            sync_duration = time.time() - sync_start
-                            
-                            # Warn if fsync is unusually slow (potential MDS/OSD issues)
-                            if sync_duration > 0.5:  # 500ms threshold
-                                log.warning(
-                                    f"⚠️  SLOW FSYNC: {sync_duration:.3f}s for {target_file_path} "
-                                    f"({file_size / 1024 / 1024:.2f} MB) - Possible CephFS MDS/OSD performance issue. "
-                                    f"Check 'dmesg -T | grep -i ceph' for connection errors."
-                                )
-                            else:
-                                log.info(f"Output file {target_file_path} successfully synced to CephFS in {sync_duration:.3f} seconds")
-                        except Exception as e:
-                            log.warning(f"Failed to sync output file: {e}")
-                    
+                    # Send completion signal and close connection IMMEDIATELY
+                    # Don't wait for fsync - it can take 100-800ms due to CephFS backend issues
+                    # This frees up the connection slot for new requests
                     try:
                         # Use safe_send to avoid orphaned task exceptions
                         loop.call_soon_threadsafe(
@@ -451,6 +438,37 @@ async def handle_client(websocket):
                         )
                     except Exception as exc:
                         log.error("Error signaling finished: %s", exc)
+                    
+                    # NOW do fsync AFTER connection closed (non-blocking for client)
+                    # Rationale: Given CephFS backend OSD issues causing 100-800ms fsync delays,
+                    # it's better to notify client immediately and free up connection slot.
+                    # If client on different VM tries to read before fsync completes, they will
+                    # either wait for data or get an error - acceptable tradeoff vs blocking connections.
+                    if rc == 0 and os.path.exists(target_file_path):
+                        try:
+                            file_size = os.path.getsize(target_file_path)
+                            log.info(f"Starting background sync of output file {target_file_path} (size: {file_size / 1024 / 1024:.2f} MB)")
+                            sync_start = time.time()
+                            
+                            # Open file and explicitly fsync to flush all data to the filesystem
+                            with open(target_file_path, 'rb') as f:
+                                os.fsync(f.fileno())
+                            
+                            sync_duration = time.time() - sync_start
+                            
+                            # Warn if fsync is unusually slow (potential MDS/OSD issues)
+                            if sync_duration > 0.5:  # 500ms threshold
+                                log.warning(
+                                    f"⚠️  SLOW FSYNC: {sync_duration:.3f}s for {target_file_path} "
+                                    f"({file_size / 1024 / 1024:.2f} MB) - CephFS storage backend issue. "
+                                    f"This typically indicates OSD connection problems (reconnects/failovers). "
+                                    f"Check 'dmesg -T | grep -i ceph' for OSD socket errors. "
+                                    f"Run 'check-cephfs-health' for detailed diagnostics."
+                                )
+                            else:
+                                log.info(f"Output file {target_file_path} successfully synced to CephFS in {sync_duration:.3f} seconds")
+                        except Exception as e:
+                            log.warning(f"Failed to sync output file: {e}")
 
                 threading.Thread(target=monitor_process, daemon=True).start()
 
@@ -605,10 +623,11 @@ def start_ws_server(host="0.0.0.0", port=9001):
         log.info(f"CephFS mounted from: {cephfs_health['mount_info']['source']}")
         if cephfs_health["osd_issues"] or cephfs_health["mds_issues"]:
             log.warning(
-                f"⚠️  CephFS issues detected: "
-                f"{len(cephfs_health['osd_issues'])} OSD problems, "
+                f"⚠️  CephFS backend issues detected: "
+                f"{len(cephfs_health['osd_issues'])} OSD connection problems, "
                 f"{len(cephfs_health['mds_issues'])} MDS problems. "
-                f"Performance may be degraded. Consider removing problematic nodes from mount string."
+                f"Performance may be degraded (slow fsync, high latency). "
+                f"These are storage cluster issues - contact storage team with OSD details."
             )
     else:
         log.warning("No CephFS mount detected - file sync may not work correctly")
