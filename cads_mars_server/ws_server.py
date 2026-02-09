@@ -61,6 +61,8 @@ async def handle_client(websocket):
     proc = None
     job_id = None
     workdir = None
+    request_file = None
+    result_file = None
 
     # -----------------------------------------------------
     # HEARTBEAT TASK (keep LBs & proxies from closing idle links)
@@ -89,37 +91,52 @@ async def handle_client(websocket):
 
             cmd = msg.get("cmd")
 
-            environ = msg.get("environ", {})
-            target_file = Path(msg.get("target", "")).relative_to("/")
-            target_dir = target_file.parent
-            workdir = SHARED_ROOT / target_dir
-            log.info(f"Request received: {requests} {environ} to be executed in {workdir}")
-            result_file = SHARED_ROOT / target_file
-
             # -------------------------
             # START JOB
             # -------------------------
             if cmd == "start":
-                requests = msg.get("requests", [{}])
-                requests = requests if isinstance(requests, list) else [requests]
-                
+                # Validate all required fields BEFORE any operations
                 try:
+                    assert "requests" in msg, "Missing 'requests' field in message"
+                    assert "environ" in msg, "Missing 'environ' field in message"
+                    assert "target" in msg, "Missing 'target' field in message"
+                    
+                    environ = msg["environ"]
+                    assert isinstance(environ, dict), "'environ' must be a dictionary"
+                    
+                    assert 'request_id' in environ, "Missing 'request_id' in environ"
+                    assert 'user_id' in environ, "Missing 'user_id' in environ"
+                    assert 'namespace' in environ, "Missing 'namespace' in environ"
+                    assert 'host' in environ, "Missing 'host' in environ"
+                    assert 'username' in environ, "Missing 'username' in environ"
+                    
+                    target_file = Path(msg["target"]).relative_to("/")
+                    target_dir = target_file.parent
+                    workdir = SHARED_ROOT / target_dir
+                    
                     assert os.path.exists(workdir), f"Workdir {workdir} does not exist"
+                    
                 except AssertionError as exc:
-                    raise Exception(str(exc))
-
-                assert 'request_id' in environ, "Missing request_id in environ"
-                assert 'user_id' in environ, "Missing user_id in environ"
-                assert 'namespace' in environ, "Missing namespace in environ"
-                assert 'host' in environ, "Missing host in environ"
-                assert 'username' in environ, "Missing username in environ"
-
-                job_id = environ.get("request_id")
+                    log.error(f"Validation error: {exc}")
+                    await websocket.send(json.dumps({
+                        "type": "state",
+                        "status": "error",
+                        "error": str(exc)
+                    }))
+                    continue
+                
+                # All validations passed, now proceed with job setup
+                requests = msg["requests"]
+                requests = requests if isinstance(requests, list) else [requests]
+                result_file = SHARED_ROOT / target_file
+                job_id = environ["request_id"]
+                
+                log.info(f"Request received: {len(requests)} request(s) for job {job_id} to be executed in {workdir}")
 
                 setproctitle.setproctitle(f"cads_mars_server {job_id}")
 
                 request_file = workdir / f'{job_id}.mars'
-                target_file = workdir / 'data.grib'
+                target_file_path = workdir / 'data.grib'
 
                 # Build request.json used by your current HTTP server
                 with open(request_file, "w") as f:
@@ -128,7 +145,7 @@ async def handle_client(websocket):
                         for key, value in request.items():
                             if key.lower() != 'target':
                                 f.write("{0}={1},\n".format(key, tidy(value)))
-                        f.write(f"TARGET='{target_file}'\n")
+                        f.write(f"TARGET='{target_file_path}'\n")
                 
                 log.info(f"Written request file {request_file}")
 
@@ -246,14 +263,7 @@ async def handle_client(websocket):
                 "job_id": job_id
             }))
             return
-    except AssertionError as exc:
-        log.error("Assertion error: %s", exc)
-        await websocket.send(json.dumps({
-            "type": "state",
-            "status": "error",
-            "error": str(exc),
-        }))
-
+            
     except websockets.exceptions.ConnectionClosedOK:
         # Normal closure (client and server both sent Close 1000)
         log.debug("WebSocket closed normally (1000).")
