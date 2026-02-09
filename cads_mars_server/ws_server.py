@@ -25,9 +25,6 @@ from cads_mars_server.config import (
 log = logging.getLogger("ws-mars")
 log.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
 
-# Heartbeat payload
-HEARTBEAT_PAYLOAD = json.dumps({"type": "heartbeat"})
-
 # Track active connections
 active_connections = 0
 active_connections_lock = threading.Lock()
@@ -85,18 +82,78 @@ async def handle_client(websocket):
     request_file = None
     result_file = None
     hb_task = None
+    job_running = False  # Flag to track if a job is actively running
+
+    # Helper to safely send messages from threads, catching connection close exceptions
+    async def safe_send(message):
+        """
+        Send message, catching normal connection close exceptions.
+        Use this for sends from threads to avoid orphaned task exceptions.
+        Do NOT use in heartbeat_task - it needs ConnectionClosed to propagate for cleanup.
+        """
+        try:
+            await websocket.send(message)
+        except (websockets.exceptions.ConnectionClosedOK, websockets.exceptions.ConnectionClosedError) as e:
+            # Connection closed - this is normal during shutdown, don't spam logs
+            log.debug(f"Could not send message, connection closed: {e}")
+        except Exception as e:
+            log.error(f"Unexpected error sending message: {e}")
+    
+    async def safe_close():
+        """Safely close websocket, catching exceptions."""
+        try:
+            await websocket.close()
+        except Exception as e:
+            log.debug(f"Error closing websocket: {e}")
 
     try:
         # -----------------------------------------------------
-        # HEARTBEAT TASK (keep LBs & proxies from closing idle links)
+        # HEARTBEAT TASK (monitor process health and detect client disconnect)
         # -----------------------------------------------------
         async def heartbeat_task():
+            """Send heartbeat with process status. If client disconnects, kill MARS process."""
             try:
                 while True:
                     await asyncio.sleep(HEARTBEAT_INTERVAL)
-                    await websocket.send(HEARTBEAT_PAYLOAD)
+                    
+                    # Build heartbeat with process status
+                    heartbeat = {
+                        "type": "heartbeat",
+                        "timestamp": time.time(),
+                    }
+                    
+                    if job_running and proc:
+                        # Check if process is still running
+                        poll_result = proc.poll()
+                        if poll_result is None:
+                            # Process still running
+                            heartbeat["job_status"] = "running"
+                            heartbeat["job_id"] = job_id
+                            heartbeat["pid"] = proc.pid
+                        else:
+                            # Process finished (will be handled by monitor_process)
+                            heartbeat["job_status"] = "finished"
+                            heartbeat["job_id"] = job_id
+                    else:
+                        heartbeat["job_status"] = "idle"
+                    
+                    # Send directly (not via safe_send) so ConnectionClosed propagates for cleanup
+                    await websocket.send(json.dumps(heartbeat))
+                    
             except websockets.exceptions.ConnectionClosed:
-                pass
+                # Client disconnected - kill MARS process if running
+                if job_running and proc and proc.poll() is None:
+                    log.warning(f"Client {client_addr} disconnected while job {job_id} running (PID {proc.pid}). Terminating MARS process.")
+                    try:
+                        proc.terminate()
+                        time.sleep(2)
+                        if proc.poll() is None:
+                            proc.kill()  # Force kill if terminate didn't work
+                        safe_cleanup(request_file, result_file)
+                    except Exception as e:
+                        log.error(f"Error killing MARS process: {e}")
+            except Exception as e:
+                log.error(f"Heartbeat task error: {e}")
 
         hb_task = asyncio.create_task(heartbeat_task())
         async for raw in websocket:
@@ -171,6 +228,9 @@ async def handle_client(websocket):
                 
                 log.info(f"Written request file {request_file}")
 
+                # Mark job as running
+                job_running = True
+                
                 # Inform client
                 await websocket.send(json.dumps({
                     "type": "state",
@@ -216,9 +276,10 @@ async def handle_client(websocket):
                                     _log.write(line)
                                     line = line.rstrip("\n")
                                     log.debug(line)
+                                    # Use safe_send to avoid orphaned task exceptions
                                     loop.call_soon_threadsafe(
                                         asyncio.create_task,
-                                        websocket.send(json.dumps({
+                                        safe_send(json.dumps({
                                             "type": "log",
                                             "line": line
                                         }))
@@ -237,7 +298,9 @@ async def handle_client(websocket):
                 # THREAD: detect process end → send finished
                 # ---------------------------------------------------
                 def monitor_process():
+                    nonlocal job_running
                     rc = proc.wait()
+                    job_running = False  # Mark job as no longer running
                     
                     # CRITICAL: Ensure output file is flushed to CephFS before signaling completion
                     # This prevents cache coherency issues when clients on different VMs try to access the file
@@ -257,9 +320,10 @@ async def handle_client(websocket):
                             log.warning(f"Failed to sync output file: {e}")
                     
                     try:
+                        # Use safe_send to avoid orphaned task exceptions
                         loop.call_soon_threadsafe(
                             asyncio.create_task,
-                            websocket.send(json.dumps({
+                            safe_send(json.dumps({
                                 "type": "state",
                                 "status": "finished",
                                 "returncode": rc,
@@ -268,7 +332,11 @@ async def handle_client(websocket):
                         )
                         # Clean up request file after successful completion
                         safe_cleanup(request_file)
-                        loop.call_soon_threadsafe(asyncio.create_task, websocket.close())
+                        # Use safe_close to avoid exceptions from closing websocket
+                        loop.call_soon_threadsafe(
+                            asyncio.create_task,
+                            safe_close()
+                        )
                     except Exception as exc:
                         log.error("Error signaling finished: %s", exc)
 
@@ -279,7 +347,9 @@ async def handle_client(websocket):
             # -------------------------
             elif cmd == "kill":
                 if proc and proc.poll() is None:
+                    log.info(f"Killing MARS process for job {job_id} (PID {proc.pid}) at client request")
                     proc.terminate()
+                    job_running = False
                     safe_cleanup(request_file, result_file)
                     await websocket.send(json.dumps({
                         "type": "state",
@@ -307,11 +377,15 @@ async def handle_client(websocket):
     except websockets.exceptions.ConnectionClosedOK:
         # Normal closure (client and server both sent Close 1000)
         log.debug(f"WebSocket from {client_addr} closed normally (1000).")
+        if proc and proc.poll() is None:
+            log.info(f"Job {job_id} still running (PID {proc.pid}), terminating due to normal client disconnect")
         safe_cleanup(request_file)
 
     except websockets.exceptions.ConnectionClosedError as exc:
         # Abnormal close (not 1000)
         log.warning(f"WebSocket from {client_addr} closed unexpectedly: %s", exc)
+        if proc and proc.poll() is None:
+            log.warning(f"Job {job_id} still running (PID {proc.pid}), terminating due to abnormal disconnect")
         safe_cleanup(request_file, result_file)
 
     except Exception as exc:
