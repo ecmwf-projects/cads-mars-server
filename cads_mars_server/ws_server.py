@@ -6,6 +6,7 @@ import signal
 import pty
 import subprocess
 import threading
+import time
 from pathlib import Path
 from cads_mars_server.server import tidy
 import setproctitle
@@ -18,6 +19,7 @@ from cads_mars_server.config import (
     WS_CLOSE_TIMEOUT,
     WS_PING_INTERVAL,
     DEBUG_MODE,
+    MAX_CONCURRENT_CONNECTIONS,
 )
 
 log = logging.getLogger("ws-mars")
@@ -25,6 +27,10 @@ log.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
 
 # Heartbeat payload
 HEARTBEAT_PAYLOAD = json.dumps({"type": "heartbeat"})
+
+# Track active connections
+active_connections = 0
+active_connections_lock = threading.Lock()
 
 
 def safe_cleanup(*paths):
@@ -55,6 +61,21 @@ async def handle_client(websocket):
             {"type": "log", "line": "..."}
             {"type": "state", "status": "...", ...}
     """
+    
+    global active_connections
+    
+    client_addr = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}" if websocket.remote_address else "unknown"
+    
+    # Check connection limit BEFORE incrementing
+    with active_connections_lock:
+        if MAX_CONCURRENT_CONNECTIONS > 0 and active_connections >= MAX_CONCURRENT_CONNECTIONS:
+            log.warning(f"Connection limit reached ({MAX_CONCURRENT_CONNECTIONS}), rejecting connection from {client_addr}")
+            await websocket.close(1008, f"Server at capacity ({MAX_CONCURRENT_CONNECTIONS} connections)")
+            return
+        active_connections += 1
+        current_count = active_connections
+    
+    log.info(f"New WebSocket connection from {client_addr} (active: {current_count}/{MAX_CONCURRENT_CONNECTIONS if MAX_CONCURRENT_CONNECTIONS > 0 else 'unlimited'})")
 
     loop = asyncio.get_running_loop()
 
@@ -63,25 +84,26 @@ async def handle_client(websocket):
     workdir = None
     request_file = None
     result_file = None
-
-    # -----------------------------------------------------
-    # HEARTBEAT TASK (keep LBs & proxies from closing idle links)
-    # -----------------------------------------------------
-    async def heartbeat_task():
-        try:
-            while True:
-                await asyncio.sleep(HEARTBEAT_INTERVAL)
-                await websocket.send(HEARTBEAT_PAYLOAD)
-        except websockets.exceptions.ConnectionClosed:
-            pass
-
-    hb_task = asyncio.create_task(heartbeat_task())
+    hb_task = None
 
     try:
+        # -----------------------------------------------------
+        # HEARTBEAT TASK (keep LBs & proxies from closing idle links)
+        # -----------------------------------------------------
+        async def heartbeat_task():
+            try:
+                while True:
+                    await asyncio.sleep(HEARTBEAT_INTERVAL)
+                    await websocket.send(HEARTBEAT_PAYLOAD)
+            except websockets.exceptions.ConnectionClosed:
+                pass
+
+        hb_task = asyncio.create_task(heartbeat_task())
         async for raw in websocket:
             try:
                 msg = json.loads(raw)
-            except Exception:
+            except Exception as e:
+                log.warning(f"Invalid JSON from {client_addr}: {e}")
                 await websocket.send(json.dumps({
                     "type": "state",
                     "status": "error",
@@ -117,7 +139,7 @@ async def handle_client(websocket):
                     assert os.path.exists(workdir), f"Workdir {workdir} does not exist"
                     
                 except AssertionError as exc:
-                    log.error(f"Validation error: {exc}")
+                    log.error(f"Validation error from {client_addr}: {exc}")
                     await websocket.send(json.dumps({
                         "type": "state",
                         "status": "error",
@@ -221,13 +243,19 @@ async def handle_client(websocket):
                     # This prevents cache coherency issues when clients on different VMs try to access the file
                     if rc == 0 and os.path.exists(target_file_path):
                         try:
-                            log.debug(f"Syncing output file {target_file_path} to ensure CephFS consistency")
+                            file_size = os.path.getsize(target_file_path)
+                            log.info(f"Starting sync of output file {target_file_path} (size: {file_size / 1024 / 1024:.2f} MB)")
+                            sync_start = time.time()
+                            
                             # Open file and explicitly fsync to flush all data to the filesystem
                             with open(target_file_path, 'rb') as f:
                                 os.fsync(f.fileno())
+                            
                             # Additional sync to flush filesystem metadata
                             os.sync()
-                            log.info(f"Output file {target_file_path} successfully synced to CephFS")
+                            
+                            sync_duration = time.time() - sync_start
+                            log.info(f"Output file {target_file_path} successfully synced to CephFS in {sync_duration:.3f} seconds")
                         except Exception as e:
                             log.warning(f"Failed to sync output file: {e}")
                     
@@ -281,22 +309,30 @@ async def handle_client(websocket):
             
     except websockets.exceptions.ConnectionClosedOK:
         # Normal closure (client and server both sent Close 1000)
-        log.debug("WebSocket closed normally (1000).")
+        log.debug(f"WebSocket from {client_addr} closed normally (1000).")
         safe_cleanup(request_file)
 
     except websockets.exceptions.ConnectionClosedError as exc:
         # Abnormal close (not 1000)
-        log.warning("WebSocket closed unexpectedly: %s", exc)
+        log.warning(f"WebSocket from {client_addr} closed unexpectedly: %s", exc)
         safe_cleanup(request_file, result_file)
 
     except Exception as exc:
-        log.error("WebSocket session failed: %s", exc)
+        log.error(f"WebSocket session from {client_addr} failed: %s", exc)
         safe_cleanup(request_file, result_file)
 
     finally:
-        hb_task.cancel()
+        # Always cancel heartbeat and cleanup
+        if hb_task:
+            hb_task.cancel()
         if proc and proc.poll() is None:
             proc.terminate()
+        
+        # Decrement active connection count
+        with active_connections_lock:
+            active_connections -= 1
+            current_count = active_connections
+        log.info(f"Connection from {client_addr} closed (active: {current_count}/{MAX_CONCURRENT_CONNECTIONS if MAX_CONCURRENT_CONNECTIONS > 0 else 'unlimited'})")
 
 
 def start_ws_server(host="0.0.0.0", port=9001):
@@ -305,5 +341,9 @@ def start_ws_server(host="0.0.0.0", port=9001):
     """
     logging.basicConfig(level=logging.INFO)
     log.info(f"Starting MARS WebSocket server on ws://{host}:{port}")
+    if MAX_CONCURRENT_CONNECTIONS > 0:
+        log.info(f"Max concurrent connections: {MAX_CONCURRENT_CONNECTIONS}")
+    else:
+        log.info("Max concurrent connections: unlimited (configure MARS_MAX_CONCURRENT_CONNECTIONS to set a limit)")
 
     return websockets.serve(handle_client, host, port)

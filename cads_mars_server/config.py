@@ -114,6 +114,9 @@ HEARTBEAT_INTERVAL = _get_config("MARS_HEARTBEAT_INTERVAL", "heartbeat_interval"
 # Timeout for websocket close operations
 WS_CLOSE_TIMEOUT = _get_config("MARS_WS_CLOSE_TIMEOUT", "ws_close_timeout", 30, int)
 
+# Maximum concurrent WebSocket connections (0 = unlimited)
+MAX_CONCURRENT_CONNECTIONS = _get_config("MARS_MAX_CONCURRENT_CONNECTIONS", "max_concurrent_connections", 0, int)
+
 # Ping interval for websocket connections (None to disable)
 # Special handling for optional int
 _ws_ping_env = os.getenv("MARS_WS_PING_INTERVAL")
