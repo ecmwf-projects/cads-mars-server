@@ -29,6 +29,10 @@ log.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
 active_connections = 0
 active_connections_lock = threading.Lock()
 
+# Track all spawned processes for cleanup on shutdown
+active_processes = set()
+active_processes_lock = threading.Lock()
+
 
 def safe_cleanup(*paths):
     """
@@ -145,11 +149,15 @@ async def handle_client(websocket):
                 if job_running and proc and proc.poll() is None:
                     log.warning(f"Client {client_addr} disconnected while job {job_id} running (PID {proc.pid}). Terminating MARS process.")
                     try:
-                        proc.terminate()
+                        # Kill the entire process group
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
                         time.sleep(2)
                         if proc.poll() is None:
-                            proc.kill()  # Force kill if terminate didn't work
+                            log.warning(f"Force killing process group for PID {proc.pid}")
+                            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                         safe_cleanup(request_file, result_file)
+                    except (ProcessLookupError, OSError) as e:
+                        log.debug(f"Process {proc.pid} already terminated: {e}")
                     except Exception as e:
                         log.error(f"Error killing MARS process: {e}")
             except Exception as e:
@@ -262,6 +270,10 @@ async def handle_client(websocket):
                     bufsize=0,
                     close_fds=True,
                 )
+                
+                # Track this process for cleanup on shutdown
+                with active_processes_lock:
+                    active_processes.add(proc)
 
                 os.close(slave_fd)
 
@@ -348,7 +360,11 @@ async def handle_client(websocket):
             elif cmd == "kill":
                 if proc and proc.poll() is None:
                     log.info(f"Killing MARS process for job {job_id} (PID {proc.pid}) at client request")
-                    proc.terminate()
+                    try:
+                        # Kill the entire process group
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                    except (ProcessLookupError, OSError) as e:
+                        log.debug(f"Process {proc.pid} already terminated: {e}")
                     job_running = False
                     safe_cleanup(request_file, result_file)
                     await websocket.send(json.dumps({
@@ -396,8 +412,29 @@ async def handle_client(websocket):
         # Always cancel heartbeat and cleanup
         if hb_task:
             hb_task.cancel()
-        if proc and proc.poll() is None:
-            proc.terminate()
+        
+        # Kill MARS process and its children if still running
+        if proc:
+            try:
+                if proc.poll() is None:
+                    log.info(f"Cleaning up MARS process (PID {proc.pid}) for job {job_id}")
+                    try:
+                        # Kill the entire process group (mars + bash + any children)
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                        try:
+                            proc.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            log.warning(f"Force killing process group (PID {proc.pid}) for job {job_id}")
+                            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                            proc.wait()
+                    except (ProcessLookupError, OSError) as e:
+                        log.debug(f"Process {proc.pid} already terminated: {e}")
+                
+                # Remove from active processes tracking
+                with active_processes_lock:
+                    active_processes.discard(proc)
+            except Exception as e:
+                log.error(f"Error cleaning up process: {e}")
         
         # Decrement active connection count
         with active_connections_lock:
@@ -406,11 +443,61 @@ async def handle_client(websocket):
         log.info(f"Connection from {client_addr} closed (active: {current_count}/{MAX_CONCURRENT_CONNECTIONS if MAX_CONCURRENT_CONNECTIONS > 0 else 'unlimited'})")
 
 
+def cleanup_orphaned_processes():
+    """
+    Kill any orphaned mars/bash processes from previous crashes.
+    This prevents process accumulation during restart loops.
+    """
+    try:
+        # Find orphaned mars processes
+        result = subprocess.run(
+            ["pgrep", "-f", "mars.*\.request"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            orphaned_pids = result.stdout.strip().split('\n')
+            log.info(f"Found {len(orphaned_pids)} orphaned mars processes from previous run")
+            for pid in orphaned_pids:
+                try:
+                    # Kill the process group
+                    pgid = os.getpgid(int(pid))
+                    os.killpg(pgid, signal.SIGTERM)
+                    log.info(f"Killed orphaned process group {pgid}")
+                except (ProcessLookupError, OSError) as e:
+                    log.debug(f"Process {pid} already gone: {e}")
+    except Exception as e:
+        log.warning(f"Error cleaning up orphaned processes: {e}")
+
+
+def kill_all_active_processes():
+    """
+    Kill all active MARS processes. Called on shutdown.
+    """
+    with active_processes_lock:
+        if active_processes:
+            log.info(f"Killing {len(active_processes)} active MARS processes")
+            for proc in list(active_processes):
+                try:
+                    if proc.poll() is None:
+                        # Kill the entire process group
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                        log.info(f"Killed process group for PID {proc.pid}")
+                except (ProcessLookupError, OSError) as e:
+                    log.debug(f"Process {proc.pid} already terminated: {e}")
+            active_processes.clear()
+
+
 def start_ws_server(host="0.0.0.0", port=9001):
     """
     Start the WebSocket server. Called from __main__.
     """
     logging.basicConfig(level=logging.INFO)
+    
+    # Clean up any orphaned processes from previous crashes
+    log.info("Checking for orphaned processes from previous run...")
+    cleanup_orphaned_processes()
+    
     log.info(f"Starting MARS WebSocket server on ws://{host}:{port}")
     if MAX_CONCURRENT_CONNECTIONS > 0:
         log.info(f"Max concurrent connections: {MAX_CONCURRENT_CONNECTIONS}")
