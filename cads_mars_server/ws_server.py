@@ -638,10 +638,4 @@ def start_ws_server(host="0.0.0.0", port=9001):
     else:
         log.info("Max concurrent connections: unlimited (configure MARS_MAX_CONCURRENT_CONNECTIONS to set a limit)")
     
-    # Start metrics export thread if enabled
-    if METRICS_ENABLED:
-        log.info(f"Metrics collection enabled, exporting to {METRICS_FILE} every {METRICS_EXPORT_INTERVAL}s")
-        metrics_thread = threading.Thread(target=periodic_metrics_export, daemon=True)
-        metrics_thread.start()
-    
     return websockets.serve(handle_client, host, port)
