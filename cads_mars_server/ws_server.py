@@ -216,6 +216,21 @@ async def handle_client(websocket):
                 # ---------------------------------------------------
                 def monitor_process():
                     rc = proc.wait()
+                    
+                    # CRITICAL: Ensure output file is flushed to CephFS before signaling completion
+                    # This prevents cache coherency issues when clients on different VMs try to access the file
+                    if rc == 0 and os.path.exists(target_file_path):
+                        try:
+                            log.debug(f"Syncing output file {target_file_path} to ensure CephFS consistency")
+                            # Open file and explicitly fsync to flush all data to the filesystem
+                            with open(target_file_path, 'rb') as f:
+                                os.fsync(f.fileno())
+                            # Additional sync to flush filesystem metadata
+                            os.sync()
+                            log.info(f"Output file {target_file_path} successfully synced to CephFS")
+                        except Exception as e:
+                            log.warning(f"Failed to sync output file: {e}")
+                    
                     try:
                         loop.call_soon_threadsafe(
                             asyncio.create_task,
