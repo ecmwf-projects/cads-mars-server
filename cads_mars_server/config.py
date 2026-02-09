@@ -139,6 +139,9 @@ MAX_RETRIES = _get_config("MARS_MAX_RETRIES", "max_retries", 10, int)
 # Request timeout for individual server attempts
 REQUEST_TIMEOUT = _get_config("MARS_REQUEST_TIMEOUT", "request_timeout", 30, int)
 
+# Filter MARS log output to reduce noise (client-side)
+CLIENT_FILTER_LOGS = _get_config("MARS_CLIENT_FILTER_LOGS", "client_filter_logs", True, bool)
+
 # ============================================================================
 # Logging Configuration
 # ============================================================================

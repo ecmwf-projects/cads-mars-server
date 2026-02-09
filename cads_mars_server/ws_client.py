@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import random
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional, Callable
 
 import websockets
 
@@ -13,6 +13,11 @@ from cads_mars_server.config import (
     REQUEST_TIMEOUT,
     WS_PING_INTERVAL,
     WS_CLOSE_TIMEOUT,
+    CLIENT_FILTER_LOGS,
+)
+from cads_mars_server.log_filter import (
+    LogHandler,
+    create_default_log_handler,
 )
 
 
@@ -22,6 +27,7 @@ async def _run_one_server(
     environ: dict[str, Any],
     target: str,
     logger=None,
+    log_handler: Optional[LogHandler] = None,
 ) -> Result:
     logs: list[str] = []
 
@@ -55,11 +61,34 @@ async def _run_one_server(
 
             if mtype == "log":
                 line = msg.get("line", "")
-                logs.append(line)
-                if logger:
-                    logger.info(line)
+                logs.append(line)  # Always store raw line
+                
+                # Process log line with custom handler
+                if log_handler:
+                    try:
+                        display_line = await log_handler(line, ws, logger)
+                        if display_line:
+                            if logger:
+                                # Use appropriate log level based on content
+                                if '❌' in display_line:
+                                    logger.error(display_line)
+                                elif '⚠️' in display_line:
+                                    logger.warning(display_line)
+                                else:
+                                    logger.info(display_line)
+                            else:
+                                print(display_line)
+                    except Exception as e:
+                        # Log handler raised exception - abort request
+                        if logger:
+                            logger.error(f"Log handler aborted request: {e}")
+                        raise
                 else:
-                    print(line)
+                    # No handler, show raw logs
+                    if logger:
+                        logger.info(line)
+                    else:
+                        print(line)
                 continue
 
             if mtype == "state":
@@ -112,13 +141,36 @@ async def mars_via_ws(
     environ: dict[str, Any],
     target: str,
     logger=None,
+    filter_logs: Optional[bool] = None,
+    log_handler: Optional[LogHandler] = None,
 ) -> Result:
     """
     Execute a MARS retrieval via websocket servers.
+    
+    Args:
+        server_list: List of WebSocket server URLs to try
+        requests: MARS request dict or list of dicts
+        environ: Environment variables for MARS
+        target: Target file path for output
+        logger: Optional logger instance
+        filter_logs: If True/False, enables/disables default log filtering.
+                     If None (default), uses CLIENT_FILTER_LOGS config setting.
+                     Ignored if log_handler is provided.
+        log_handler: Optional custom log handler function. If provided, this takes
+                     precedence over filter_logs. The handler receives (line, ws, logger)
+                     and should return formatted line or None to suppress.
+                     Can raise exceptions to abort request or send commands to ws.
 
     Returns a :class:`~cads_mars_server.client.Result` instance (same shape as the HTTP client),
     so callers can uniformly handle success/failure.
     """
+    # Use custom log handler if provided, otherwise create default handler
+    if log_handler is None:
+        # Use filter_logs to determine if we should filter
+        if filter_logs is None:
+            filter_logs = CLIENT_FILTER_LOGS
+        log_handler = create_default_log_handler(filter_logs=filter_logs)
+    
     reqs = requests if isinstance(requests, list) else [requests]
 
     servers = list(server_list)
@@ -131,7 +183,7 @@ async def mars_via_ws(
             try:
                 # Apply an overall timeout to each server attempt.
                 last_result = await asyncio.wait_for(
-                    _run_one_server(ws_url, reqs, environ, target, logger=logger),
+                    _run_one_server(ws_url, reqs, environ, target, logger=logger, log_handler=log_handler),
                     timeout=REQUEST_TIMEOUT,
                 )
                 # If the server returned an error, we try the next server (or next retry cycle).
@@ -175,8 +227,20 @@ def mars_via_ws_sync(
     environ,
     target: str,
     logger=None,
+    filter_logs: Optional[bool] = None,
+    log_handler: Optional[LogHandler] = None,
 ) -> Result:
-    return asyncio.run(mars_via_ws(server_list, requests, environ, target, logger=logger))
+    return asyncio.run(
+        mars_via_ws(
+            server_list, 
+            requests, 
+            environ, 
+            target, 
+            logger=logger, 
+            filter_logs=filter_logs,
+            log_handler=log_handler
+        )
+    )
 
 
 if __name__ == "__main__":
