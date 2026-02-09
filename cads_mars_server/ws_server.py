@@ -34,6 +34,97 @@ active_processes = set()
 active_processes_lock = threading.Lock()
 
 
+def check_cephfs_health():
+    """
+    Check CephFS health and report MDS/OSD connection issues.
+    Returns dict with health info and warnings.
+    """
+    health_info = {
+        "mds_issues": [],
+        "osd_issues": [],
+        "mount_info": None,
+        "recent_errors": []
+    }
+    
+    try:
+        # Check for CephFS mount points
+        with open("/proc/mounts", "r") as f:
+            for line in f:
+                if "type ceph" in line:
+                    parts = line.split()
+                    health_info["mount_info"] = {
+                        "source": parts[0],
+                        "mountpoint": parts[1],
+                        "options": parts[3]
+                    }
+                    log.info(f"CephFS mounted: {parts[0]} on {parts[1]}")
+                    break
+        
+        # Check recent dmesg for ceph errors
+        try:
+            result = subprocess.run(
+                ["dmesg", "-T", "--level=err,warn", "|", "grep", "-i", "ceph", "|", "tail", "-20"],
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.stdout.strip():
+                errors = result.stdout.strip().split('\n')
+                health_info["recent_errors"] = errors[-10:]  # Last 10 errors
+                
+                # Parse for specific OSD/MDS issues
+                for error in errors[-10:]:
+                    if "osd" in error.lower() and "socket closed" in error.lower():
+                        # Extract OSD number and IP
+                        import re
+                        match = re.search(r'osd(\d+).*?(\d+\.\d+\.\d+\.\d+)', error)
+                        if match:
+                            osd_num, ip = match.groups()
+                            health_info["osd_issues"].append({"osd": osd_num, "ip": ip, "error": "socket_closed"})
+                    elif "mds" in error.lower():
+                        health_info["mds_issues"].append(error)
+        except Exception as e:
+            log.debug(f"Could not check dmesg: {e}")
+        
+        # Try to get MDS session info from debugfs
+        try:
+            debugfs_paths = Path("/sys/kernel/debug/ceph").glob("*/mdsc")
+            for mdsc_path in debugfs_paths:
+                try:
+                    with open(mdsc_path, "r") as f:
+                        mdsc_info = f.read()
+                        # Look for active MDS sessions
+                        if "mds" in mdsc_info:
+                            log.debug(f"MDS session info: {mdsc_info[:200]}")
+                except PermissionError:
+                    log.debug("No permission to read MDS debug info (needs root)")
+                except Exception as e:
+                    log.debug(f"Could not read MDS debug info: {e}")
+        except Exception as e:
+            log.debug(f"Could not access ceph debugfs: {e}")
+        
+        # Report findings
+        if health_info["osd_issues"]:
+            unique_osds = {}
+            for issue in health_info["osd_issues"]:
+                key = (issue["osd"], issue["ip"])
+                unique_osds[key] = issue
+            log.warning(f"Detected {len(unique_osds)} OSDs with connection issues:")
+            for (osd, ip), issue in unique_osds.items():
+                log.warning(f"  - OSD {osd} at {ip}: {issue['error']}")
+        
+        if health_info["mds_issues"]:
+            log.warning(f"Detected {len(health_info['mds_issues'])} MDS issues in logs")
+            for issue in health_info["mds_issues"][:5]:
+                log.warning(f"  - {issue}")
+        
+    except Exception as e:
+        log.warning(f"Error checking CephFS health: {e}")
+    
+    return health_info
+
+
 def safe_cleanup(*paths):
     """
     Safely remove files, logging any issues without raising exceptions.
@@ -327,7 +418,16 @@ async def handle_client(websocket):
                                 os.fsync(f.fileno())
                             
                             sync_duration = time.time() - sync_start
-                            log.info(f"Output file {target_file_path} successfully synced to CephFS in {sync_duration:.3f} seconds")
+                            
+                            # Warn if fsync is unusually slow (potential MDS/OSD issues)
+                            if sync_duration > 0.5:  # 500ms threshold
+                                log.warning(
+                                    f"⚠️  SLOW FSYNC: {sync_duration:.3f}s for {target_file_path} "
+                                    f"({file_size / 1024 / 1024:.2f} MB) - Possible CephFS MDS/OSD performance issue. "
+                                    f"Check 'dmesg -T | grep -i ceph' for connection errors."
+                                )
+                            else:
+                                log.info(f"Output file {target_file_path} successfully synced to CephFS in {sync_duration:.3f} seconds")
                         except Exception as e:
                             log.warning(f"Failed to sync output file: {e}")
                     
@@ -497,6 +597,21 @@ def start_ws_server(host="0.0.0.0", port=9001):
     # Clean up any orphaned processes from previous crashes
     log.info("Checking for orphaned processes from previous run...")
     cleanup_orphaned_processes()
+    
+    # Check CephFS health and report issues
+    log.info("Checking CephFS health...")
+    cephfs_health = check_cephfs_health()
+    if cephfs_health["mount_info"]:
+        log.info(f"CephFS mounted from: {cephfs_health['mount_info']['source']}")
+        if cephfs_health["osd_issues"] or cephfs_health["mds_issues"]:
+            log.warning(
+                f"⚠️  CephFS issues detected: "
+                f"{len(cephfs_health['osd_issues'])} OSD problems, "
+                f"{len(cephfs_health['mds_issues'])} MDS problems. "
+                f"Performance may be degraded. Consider removing problematic nodes from mount string."
+            )
+    else:
+        log.warning("No CephFS mount detected - file sync may not work correctly")
     
     log.info(f"Starting MARS WebSocket server on ws://{host}:{port}")
     if MAX_CONCURRENT_CONNECTIONS > 0:
