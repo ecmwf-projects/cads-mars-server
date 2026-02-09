@@ -251,9 +251,6 @@ async def handle_client(websocket):
                             with open(target_file_path, 'rb') as f:
                                 os.fsync(f.fileno())
                             
-                            # Additional sync to flush filesystem metadata
-                            os.sync()
-                            
                             sync_duration = time.time() - sync_start
                             log.info(f"Output file {target_file_path} successfully synced to CephFS in {sync_duration:.3f} seconds")
                         except Exception as e:
