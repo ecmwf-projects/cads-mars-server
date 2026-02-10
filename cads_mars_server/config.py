@@ -22,17 +22,19 @@ CONFIG_FILE = os.getenv("MARS_CONFIG_FILE", DEFAULT_CONFIG_FILE)
 def _load_yaml_config() -> dict[str, Any]:
     """
     Load configuration from YAML file if it exists.
-    
-    Returns:
+
+    Returns
+    -------
         Dictionary with configuration values, or empty dict if file doesn't exist.
     """
     config_path = Path(CONFIG_FILE)
-    
+
     if not config_path.exists():
         return {}
-    
+
     try:
         import yaml
+
         with open(config_path) as f:
             config = yaml.safe_load(f) or {}
         return config
@@ -41,6 +43,7 @@ def _load_yaml_config() -> dict[str, Any]:
         return {}
     except Exception as e:
         import warnings
+
         warnings.warn(f"Failed to load config file {CONFIG_FILE}: {e}")
         return {}
 
@@ -57,38 +60,39 @@ def _get_config(
 ) -> Any:
     """
     Get configuration value with proper precedence.
-    
+
     Precedence: ENV > FILE > DEFAULT
-    
+
     Args:
         env_key: Environment variable name (e.g., "MARS_PIPE_PORT")
         file_key: Key in YAML file (e.g., "pipe_port")
         default: Default value if not found
         cast_type: Type to cast the value to
-        
-    Returns:
+
+    Returns
+    -------
         Configuration value with proper type
     """
     # 1. Check environment variable
     env_value = os.getenv(env_key)
     if env_value is not None:
-        if cast_type == bool:
+        if cast_type is bool:
             return env_value.lower() in ("true", "1", "yes", "on")
-        elif cast_type == Path:
+        elif cast_type is Path:
             return Path(env_value)
         else:
             return cast_type(env_value)
-    
+
     # 2. Check file config
     file_value = _file_config.get(file_key)
     if file_value is not None:
-        if cast_type == Path:
+        if cast_type is Path:
             return Path(file_value)
-        elif cast_type == bool:
+        elif cast_type is bool:
             return bool(file_value)
         else:
             return cast_type(file_value)
-    
+
     # 3. Use default
     return default
 
@@ -109,13 +113,17 @@ SHARED_ROOT = _get_config("MARS_SHARED_ROOT", "shared_root", "/cache", Path)
 # ============================================================================
 
 # Heartbeat interval to keep load balancers from closing idle connections
-HEARTBEAT_INTERVAL = _get_config("MARS_HEARTBEAT_INTERVAL", "heartbeat_interval", 20, int)
+HEARTBEAT_INTERVAL = _get_config(
+    "MARS_HEARTBEAT_INTERVAL", "heartbeat_interval", 20, int
+)
 
 # Timeout for websocket close operations
 WS_CLOSE_TIMEOUT = _get_config("MARS_WS_CLOSE_TIMEOUT", "ws_close_timeout", 30, int)
 
 # Maximum concurrent WebSocket connections (0 = unlimited)
-MAX_CONCURRENT_CONNECTIONS = _get_config("MARS_MAX_CONCURRENT_CONNECTIONS", "max_concurrent_connections", 0, int)
+MAX_CONCURRENT_CONNECTIONS = _get_config(
+    "MARS_MAX_CONCURRENT_CONNECTIONS", "max_concurrent_connections", 0, int
+)
 
 # Ping interval for websocket connections (None to disable)
 # Special handling for optional int
@@ -140,7 +148,9 @@ MAX_RETRIES = _get_config("MARS_MAX_RETRIES", "max_retries", 10, int)
 REQUEST_TIMEOUT = _get_config("MARS_REQUEST_TIMEOUT", "request_timeout", 30, int)
 
 # Filter MARS log output to reduce noise (client-side)
-CLIENT_FILTER_LOGS = _get_config("MARS_CLIENT_FILTER_LOGS", "client_filter_logs", True, bool)
+CLIENT_FILTER_LOGS = _get_config(
+    "MARS_CLIENT_FILTER_LOGS", "client_filter_logs", True, bool
+)
 
 # ============================================================================
 # Logging Configuration

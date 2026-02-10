@@ -3,17 +3,19 @@
 A proxy MARS server and client designed for CADS with two operational modes:
 
 1. **Pipe Mode** (default): Traditional synchronous client using MARS stdin/stdout pipes
-2. **Shares Mode**: Asynchronous WebSocket-based client with shared filesystem access
+1. **Shares Mode**: Asynchronous WebSocket-based client with shared filesystem access
 
 ## Features
 
 ### Pipe Mode (Default)
+
 - Direct MARS process execution via stdin/stdout
 - Synchronous request handling
 - No additional server infrastructure required
 - Backward compatible with all existing deployments
 
 ### Shares Mode (WebSocket)
+
 - Asynchronous job processing with server-side execution
 - Real-time log streaming from MARS processes
 - Connection pooling with automatic failover
@@ -28,6 +30,7 @@ pip install cads-mars-server
 ```
 
 For development:
+
 ```bash
 git clone <repository>
 cd cads-mars-server
@@ -44,10 +47,10 @@ from cads_adaptors import Context
 
 # Executes using traditional pipe client
 result = execute_mars(
-    request={"class": "ea", "date": "20240101", ...},
+    request={"class": "ea", "date": "20240101", "param": "2t"},
     context=Context(),
     target_fname="output.grib",
-    target_dir="/path/to/output"
+    target_dir="/path/to/output",
 )
 ```
 
@@ -114,6 +117,7 @@ The `USE_SHARES` configuration controls which client is used:
 ### Configuration Methods
 
 **Environment Variables:**
+
 ```bash
 export MARS_USE_SHARES=true
 export MARS_WS_SERVERS="ws://server1:9001,ws://server2:9001"
@@ -122,6 +126,7 @@ export MARS_MAX_CONCURRENT_CONNECTIONS=10  # Server connection limit
 ```
 
 **Config File (`/etc/cads-mars-server.yaml`):**
+
 ```yaml
 use_shares: true
 mars_ws_servers:

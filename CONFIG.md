@@ -5,14 +5,15 @@
 `cads-mars-server` supports two configuration methods:
 
 1. **YAML Configuration File** (recommended for systemd services)
-2. **Environment Variables** (recommended for Kubernetes/containers)
+1. **Environment Variables** (recommended for Kubernetes/containers)
 
 **Configuration Precedence:**
-1. Environment variables (highest priority)
-2. YAML configuration file
-3. Built-in defaults (lowest priority)
 
----
+1. Environment variables (highest priority)
+1. YAML configuration file
+1. Built-in defaults (lowest priority)
+
+______________________________________________________________________
 
 ## YAML Configuration File
 
@@ -25,6 +26,7 @@
 ### Custom Location
 
 Set via environment variable:
+
 ```bash
 export MARS_CONFIG_FILE=/path/to/custom-config.yaml
 ```
@@ -58,17 +60,20 @@ debug_mode: false
 ### For systemd Services
 
 1. **Copy example configuration:**
+
    ```bash
    sudo cp cads-mars-server.yaml.example /etc/cads-mars-server.yaml
    sudo chmod 644 /etc/cads-mars-server.yaml
    ```
 
-2. **Edit configuration:**
+1. **Edit configuration:**
+
    ```bash
    sudo vim /etc/cads-mars-server.yaml
    ```
 
-3. **Install and start service:**
+1. **Install and start service:**
+
    ```bash
    sudo cp cads-mars-server.service.example /etc/systemd/system/cads-mars-server.service
    sudo systemctl daemon-reload
@@ -76,13 +81,14 @@ debug_mode: false
    sudo systemctl start cads-mars-server
    ```
 
-4. **Check status:**
+1. **Check status:**
+
    ```bash
    sudo systemctl status cads-mars-server
    sudo journalctl -u cads-mars-server -f
    ```
 
----
+______________________________________________________________________
 
 ## Environment Variables
 
@@ -142,13 +148,14 @@ spec:
             name: mars-server-config
 ```
 
----
+______________________________________________________________________
 
 ## Configuration Examples
 
 ### Example 1: Production with Shared Filesystem
 
 **YAML (`/etc/cads-mars-server.yaml`):**
+
 ```yaml
 use_shares: true
 shared_root: /mnt/cephfs
@@ -163,6 +170,7 @@ debug_mode: false
 ```
 
 **Environment Override (takes precedence):**
+
 ```bash
 # Enable debug mode temporarily
 export MARS_WS_DEBUG=true
@@ -171,6 +179,7 @@ export MARS_WS_DEBUG=true
 ### Example 2: Development Environment
 
 **YAML:**
+
 ```yaml
 use_shares: false
 pipe_port: 9000
@@ -184,6 +193,7 @@ request_timeout: 30
 ### Example 3: Kubernetes with CephFS
 
 **ConfigMap:**
+
 ```yaml
 apiVersion: v1
 kind: ConfigMap
@@ -199,7 +209,7 @@ data:
   MARS_HEARTBEAT_INTERVAL: "30"
 ```
 
----
+______________________________________________________________________
 
 ## Validation
 
@@ -246,7 +256,7 @@ print(f'Debug Mode: {DEBUG_MODE}')
 # Debug Mode: True
 ```
 
----
+______________________________________________________________________
 
 ## Troubleshooting
 
@@ -255,23 +265,28 @@ print(f'Debug Mode: {DEBUG_MODE}')
 **Problem:** Settings in YAML file are ignored.
 
 **Solutions:**
+
 1. Check file location:
+
    ```bash
    echo $MARS_CONFIG_FILE
    ls -l /etc/cads-mars-server.yaml
    ```
 
-2. Verify YAML syntax:
+1. Verify YAML syntax:
+
    ```bash
    python3 -c "import yaml; print(yaml.safe_load(open('/etc/cads-mars-server.yaml')))"
    ```
 
-3. Check file permissions:
+1. Check file permissions:
+
    ```bash
    chmod 644 /etc/cads-mars-server.yaml
    ```
 
-4. Install PyYAML if missing:
+1. Install PyYAML if missing:
+
    ```bash
    pip install pyyaml
    ```
@@ -281,18 +296,22 @@ print(f'Debug Mode: {DEBUG_MODE}')
 **Problem:** Environment variables are ignored.
 
 **Solutions:**
+
 1. Verify variable is set:
+
    ```bash
    echo $MARS_USE_SHARES
    ```
 
-2. For systemd, ensure variables are in service file:
+1. For systemd, ensure variables are in service file:
+
    ```ini
    [Service]
    Environment="MARS_USE_SHARES=true"
    ```
 
-3. Reload systemd after changes:
+1. Reload systemd after changes:
+
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl restart cads-mars-server
@@ -322,101 +341,107 @@ export MARS_WS_DEBUG=true
 python3 -m cads_mars_server.ws_main
 ```
 
----
+______________________________________________________________________
 
 ## Migration from Environment-Only Configuration
 
 If you're upgrading from a version that only used environment variables:
 
 1. **No action required** - Environment variables still work exactly as before
-2. **Optional:** Create YAML file for easier management
-3. **Recommended:** For systemd services, migrate to YAML configuration
+1. **Optional:** Create YAML file for easier management
+1. **Recommended:** For systemd services, migrate to YAML configuration
 
 **Migration steps:**
 
 1. Create configuration file:
+
    ```bash
    sudo cp cads-mars-server.yaml.example /etc/cads-mars-server.yaml
    ```
 
-2. Transfer settings from environment to YAML:
+1. Transfer settings from environment to YAML:
+
    ```bash
    # Old: systemd service had many Environment= lines
    # New: Single config file with all settings
    ```
 
-3. Remove environment variables from service file (optional):
+1. Remove environment variables from service file (optional):
+
    ```bash
    sudo vim /etc/systemd/system/cads-mars-server.service
    # Remove or comment out Environment= lines
    ```
 
-4. Reload and restart:
+1. Reload and restart:
+
    ```bash
    sudo systemctl daemon-reload
    sudo systemctl restart cads-mars-server
    ```
 
----
+______________________________________________________________________
 
 ## Best Practices
 
 ### For Production
 
 1. **Use YAML file** for systemd services
-2. **Keep sensitive values** out of config file if possible
-3. **Use environment variables** for deployment-specific overrides
-4. **Version control** your config file template
-5. **Document** any non-default settings
+1. **Keep sensitive values** out of config file if possible
+1. **Use environment variables** for deployment-specific overrides
+1. **Version control** your config file template
+1. **Document** any non-default settings
 
 ### For Development
 
 1. **Use environment variables** for quick testing
-2. **Keep a local config file** for consistent development environment
-3. **Enable debug mode** during development
+1. **Keep a local config file** for consistent development environment
+1. **Enable debug mode** during development
 
 ### For Kubernetes
 
 1. **Use ConfigMaps** for configuration
-2. **Use Secrets** for sensitive values (if any)
-3. **Don't use config files** - stick with environment variables
-4. **Keep defaults** in deployment manifests
+1. **Use Secrets** for sensitive values (if any)
+1. **Don't use config files** - stick with environment variables
+1. **Keep defaults** in deployment manifests
 
----
+______________________________________________________________________
 
 ## Dependencies
 
 - **PyYAML** (optional): Required for YAML file support
+
   ```bash
   pip install pyyaml
   ```
-  
+
   If PyYAML is not installed, the server will fall back to environment variables and built-in defaults.
 
----
+______________________________________________________________________
 
 ## Security Considerations
 
 1. **File Permissions:** Ensure config file has appropriate permissions
+
    ```bash
    sudo chown root:mars /etc/cads-mars-server.yaml
    sudo chmod 640 /etc/cads-mars-server.yaml
    ```
 
-2. **No Secrets:** Don't store passwords or tokens in config file
+1. **No Secrets:** Don't store passwords or tokens in config file
 
-3. **Systemd Hardening:** Use systemd security features (see example service file)
+1. **Systemd Hardening:** Use systemd security features (see example service file)
 
-4. **Shared Filesystem:** Ensure proper access controls on shared filesystem
+1. **Shared Filesystem:** Ensure proper access controls on shared filesystem
 
----
+______________________________________________________________________
 
 ## Getting Help
 
 If you have configuration issues:
 
 1. Check this documentation
-2. Verify configuration precedence
-3. Enable debug mode to see what's happening
-4. Check system logs: `journalctl -u cads-mars-server`
-5. Contact support with your (sanitized) configuration
+1. Verify configuration precedence
+1. Enable debug mode to see what's happening
+1. Check system logs: `journalctl -u cads-mars-server`
+1. Contact support with your (sanitized) configuration

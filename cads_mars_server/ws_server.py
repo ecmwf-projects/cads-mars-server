@@ -2,25 +2,23 @@ import asyncio
 import json
 import logging
 import os
-import signal
 import pty
+import signal
 import subprocess
 import threading
 import time
 from pathlib import Path
-from cads_mars_server.server import tidy
-import setproctitle
 
+import setproctitle
 import websockets
 
 from cads_mars_server.config import (
-    SHARED_ROOT,
-    HEARTBEAT_INTERVAL,
-    WS_CLOSE_TIMEOUT,
-    WS_PING_INTERVAL,
     DEBUG_MODE,
+    HEARTBEAT_INTERVAL,
     MAX_CONCURRENT_CONNECTIONS,
+    SHARED_ROOT,
 )
+from cads_mars_server.server import tidy
 
 log = logging.getLogger("ws-mars")
 log.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
@@ -38,7 +36,7 @@ def check_cephfs_health():
     """
     Check CephFS health and report MDS/OSD connection issues.
     Returns dict with health info and warnings.
-    
+
     Note: OSD connection errors (like 'osd583 10.106.20.41:6971 socket closed')
     indicate storage backend issues. These IPs are OSDs (data storage nodes),
     not monitors from your mount string. You cannot fix OSD issues by changing
@@ -48,9 +46,9 @@ def check_cephfs_health():
         "mds_issues": [],
         "osd_issues": [],
         "mount_info": None,
-        "recent_errors": []
+        "recent_errors": [],
     }
-    
+
     try:
         # Check for CephFS mount points
         with open("/proc/mounts", "r") as f:
@@ -60,38 +58,52 @@ def check_cephfs_health():
                     health_info["mount_info"] = {
                         "source": parts[0],
                         "mountpoint": parts[1],
-                        "options": parts[3]
+                        "options": parts[3],
                     }
                     log.info(f"CephFS mounted: {parts[0]} on {parts[1]}")
                     break
-        
+
         # Check recent dmesg for ceph errors
         try:
             result = subprocess.run(
-                ["dmesg", "-T", "--level=err,warn", "|", "grep", "-i", "ceph", "|", "tail", "-20"],
+                [
+                    "dmesg",
+                    "-T",
+                    "--level=err,warn",
+                    "|",
+                    "grep",
+                    "-i",
+                    "ceph",
+                    "|",
+                    "tail",
+                    "-20",
+                ],
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
             )
             if result.stdout.strip():
-                errors = result.stdout.strip().split('\n')
+                errors = result.stdout.strip().split("\n")
                 health_info["recent_errors"] = errors[-10:]  # Last 10 errors
-                
+
                 # Parse for specific OSD/MDS issues
                 for error in errors[-10:]:
                     if "osd" in error.lower() and "socket closed" in error.lower():
                         # Extract OSD number and IP
                         import re
-                        match = re.search(r'osd(\d+).*?(\d+\.\d+\.\d+\.\d+)', error)
+
+                        match = re.search(r"osd(\d+).*?(\d+\.\d+\.\d+\.\d+)", error)
                         if match:
                             osd_num, ip = match.groups()
-                            health_info["osd_issues"].append({"osd": osd_num, "ip": ip, "error": "socket_closed"})
+                            health_info["osd_issues"].append(
+                                {"osd": osd_num, "ip": ip, "error": "socket_closed"}
+                            )
                     elif "mds" in error.lower():
                         health_info["mds_issues"].append(error)
         except Exception as e:
             log.debug(f"Could not check dmesg: {e}")
-        
+
         # Try to get MDS session info from debugfs
         try:
             debugfs_paths = Path("/sys/kernel/debug/ceph").glob("*/mdsc")
@@ -108,7 +120,7 @@ def check_cephfs_health():
                     log.debug(f"Could not read MDS debug info: {e}")
         except Exception as e:
             log.debug(f"Could not access ceph debugfs: {e}")
-        
+
         # Report findings
         if health_info["osd_issues"]:
             unique_osds = {}
@@ -123,22 +135,22 @@ def check_cephfs_health():
                 "Contact storage team about these failing OSDs - "
                 "changing mount monitors will not resolve this issue."
             )
-        
+
         if health_info["mds_issues"]:
             log.warning(f"Detected {len(health_info['mds_issues'])} MDS issues in logs")
             for issue in health_info["mds_issues"][:5]:
                 log.warning(f"  - {issue}")
-        
+
     except Exception as e:
         log.warning(f"Error checking CephFS health: {e}")
-    
+
     return health_info
 
 
 def safe_cleanup(*paths):
     """
     Safely remove files, logging any issues without raising exceptions.
-    
+
     Args:
         *paths: Variable number of file paths to remove
     """
@@ -152,6 +164,7 @@ def safe_cleanup(*paths):
         except Exception as e:
             log.warning(f"Failed to cleanup {path}: {e}")
 
+
 async def handle_client(websocket):
     """
     Protocol:
@@ -163,21 +176,33 @@ async def handle_client(websocket):
             {"type": "log", "line": "..."}
             {"type": "state", "status": "...", ...}
     """
-    
     global active_connections
-    
-    client_addr = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}" if websocket.remote_address else "unknown"
-    
+
+    client_addr = (
+        f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
+        if websocket.remote_address
+        else "unknown"
+    )
+
     # Check connection limit BEFORE incrementing
     with active_connections_lock:
-        if MAX_CONCURRENT_CONNECTIONS > 0 and active_connections >= MAX_CONCURRENT_CONNECTIONS:
-            log.warning(f"Connection limit reached ({MAX_CONCURRENT_CONNECTIONS}), rejecting connection from {client_addr}")
-            await websocket.close(1008, f"Server at capacity ({MAX_CONCURRENT_CONNECTIONS} connections)")
+        if (
+            MAX_CONCURRENT_CONNECTIONS > 0
+            and active_connections >= MAX_CONCURRENT_CONNECTIONS
+        ):
+            log.warning(
+                f"Connection limit reached ({MAX_CONCURRENT_CONNECTIONS}), rejecting connection from {client_addr}"
+            )
+            await websocket.close(
+                1008, f"Server at capacity ({MAX_CONCURRENT_CONNECTIONS} connections)"
+            )
             return
         active_connections += 1
         current_count = active_connections
-    
-    log.info(f"New WebSocket connection from {client_addr} (active: {current_count}/{MAX_CONCURRENT_CONNECTIONS if MAX_CONCURRENT_CONNECTIONS > 0 else 'unlimited'})")
+
+    log.info(
+        f"New WebSocket connection from {client_addr} (active: {current_count}/{MAX_CONCURRENT_CONNECTIONS if MAX_CONCURRENT_CONNECTIONS > 0 else 'unlimited'})"
+    )
 
     loop = asyncio.get_running_loop()
 
@@ -198,12 +223,15 @@ async def handle_client(websocket):
         """
         try:
             await websocket.send(message)
-        except (websockets.exceptions.ConnectionClosedOK, websockets.exceptions.ConnectionClosedError) as e:
+        except (
+            websockets.exceptions.ConnectionClosedOK,
+            websockets.exceptions.ConnectionClosedError,
+        ) as e:
             # Connection closed - this is normal during shutdown, don't spam logs
             log.debug(f"Could not send message, connection closed: {e}")
         except Exception as e:
             log.error(f"Unexpected error sending message: {e}")
-    
+
     async def safe_close():
         """Safely close websocket, catching exceptions."""
         try:
@@ -220,13 +248,13 @@ async def handle_client(websocket):
             try:
                 while True:
                     await asyncio.sleep(HEARTBEAT_INTERVAL)
-                    
+
                     # Build heartbeat with process status
                     heartbeat = {
                         "type": "heartbeat",
                         "timestamp": time.time(),
                     }
-                    
+
                     if job_running and proc:
                         # Check if process is still running
                         poll_result = proc.poll()
@@ -241,20 +269,24 @@ async def handle_client(websocket):
                             heartbeat["job_id"] = job_id
                     else:
                         heartbeat["job_status"] = "idle"
-                    
+
                     # Send directly (not via safe_send) so ConnectionClosed propagates for cleanup
                     await websocket.send(json.dumps(heartbeat))
-                    
+
             except websockets.exceptions.ConnectionClosed:
                 # Client disconnected - kill MARS process if running
                 if job_running and proc and proc.poll() is None:
-                    log.warning(f"Client {client_addr} disconnected while job {job_id} running (PID {proc.pid}). Terminating MARS process.")
+                    log.warning(
+                        f"Client {client_addr} disconnected while job {job_id} running (PID {proc.pid}). Terminating MARS process."
+                    )
                     try:
                         # Kill the entire process group
                         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
                         time.sleep(2)
                         if proc.poll() is None:
-                            log.warning(f"Force killing process group for PID {proc.pid}")
+                            log.warning(
+                                f"Force killing process group for PID {proc.pid}"
+                            )
                             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                         safe_cleanup(request_file, result_file)
                     except (ProcessLookupError, OSError) as e:
@@ -270,11 +302,11 @@ async def handle_client(websocket):
                 msg = json.loads(raw)
             except Exception as e:
                 log.warning(f"Invalid JSON from {client_addr}: {e}")
-                await websocket.send(json.dumps({
-                    "type": "state",
-                    "status": "error",
-                    "error": "Invalid JSON"
-                }))
+                await websocket.send(
+                    json.dumps(
+                        {"type": "state", "status": "error", "error": "Invalid JSON"}
+                    )
+                )
                 continue
 
             cmd = msg.get("cmd")
@@ -288,66 +320,71 @@ async def handle_client(websocket):
                     assert "requests" in msg, "Missing 'requests' field in message"
                     assert "environ" in msg, "Missing 'environ' field in message"
                     assert "target" in msg, "Missing 'target' field in message"
-                    
+
                     environ = msg["environ"]
                     assert isinstance(environ, dict), "'environ' must be a dictionary"
-                    
-                    assert 'request_id' in environ, "Missing 'request_id' in environ"
-                    assert 'user_id' in environ, "Missing 'user_id' in environ"
-                    assert 'namespace' in environ, "Missing 'namespace' in environ"
-                    assert 'host' in environ, "Missing 'host' in environ"
-                    assert 'username' in environ, "Missing 'username' in environ"
-                    
+
+                    assert "request_id" in environ, "Missing 'request_id' in environ"
+                    assert "user_id" in environ, "Missing 'user_id' in environ"
+                    assert "namespace" in environ, "Missing 'namespace' in environ"
+                    assert "host" in environ, "Missing 'host' in environ"
+                    assert "username" in environ, "Missing 'username' in environ"
+
                     target_file = Path(msg["target"]).relative_to("/")
                     target_dir = target_file.parent
                     workdir = SHARED_ROOT / target_dir
-                    
+
                     assert os.path.exists(workdir), f"Workdir {workdir} does not exist"
-                    
+
                 except AssertionError as exc:
                     log.error(f"Validation error from {client_addr}: {exc}")
-                    await websocket.send(json.dumps({
-                        "type": "state",
-                        "status": "error",
-                        "error": str(exc)
-                    }))
+                    await websocket.send(
+                        json.dumps(
+                            {"type": "state", "status": "error", "error": str(exc)}
+                        )
+                    )
                     continue
-                
+
                 # All validations passed, now proceed with job setup
                 requests = msg["requests"]
                 requests = requests if isinstance(requests, list) else [requests]
                 result_file = SHARED_ROOT / target_file
                 job_id = environ["request_id"]
-                
-                log.info(f"Request received: {len(requests)} request(s) for job {job_id} to be executed in {workdir}")
+
+                log.info(
+                    f"Request received: {len(requests)} request(s) for job {job_id} to be executed in {workdir}"
+                )
 
                 setproctitle.setproctitle(f"cads_mars_server {job_id}")
 
-                request_file = workdir / f'{job_id}.mars'
-                target_file_path = workdir / 'data.grib'
+                request_file = workdir / f"{job_id}.mars"
+                target_file_path = workdir / "data.grib"
 
                 # Build request.json used by your current HTTP server
                 with open(request_file, "w") as f:
                     for request in requests:
                         f.write("RETRIEVE,\n")
                         for key, value in request.items():
-                            if key.lower() != 'target':
+                            if key.lower() != "target":
                                 f.write("{0}={1},\n".format(key, tidy(value)))
                         f.write(f"TARGET='{target_file_path}'\n")
-                
+
                 log.info(f"Written request file {request_file}")
 
                 # Mark job as running
                 job_running = True
-                
-                # Inform client
-                await websocket.send(json.dumps({
-                    "type": "state",
-                    "status": "started",
-                    "job_id": job_id,
-                }))
 
-                
+                # Inform client
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "type": "state",
+                            "status": "started",
+                            "job_id": job_id,
+                        }
+                    )
+                )
+
                 # ---------------------------------------------------
                 # PTY — critical for real-time logs
                 # ---------------------------------------------------
@@ -358,11 +395,11 @@ async def handle_client(websocket):
                     if v is not None:
                         env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
 
-                env.update({'MARS_AUTO_SPLIT_BY_DATES': '1'})
+                env.update({"MARS_AUTO_SPLIT_BY_DATES": "1"})
 
                 # Launch mars binary
                 proc = subprocess.Popen(
-                    ["mars", str(request_file), '2>&1'],
+                    ["mars", str(request_file), "2>&1"],
                     env=env,
                     stdout=slave_fd,
                     stderr=slave_fd,
@@ -371,7 +408,7 @@ async def handle_client(websocket):
                     bufsize=0,
                     close_fds=True,
                 )
-                
+
                 # Track this process for cleanup on shutdown
                 with active_processes_lock:
                     active_processes.add(proc)
@@ -392,10 +429,9 @@ async def handle_client(websocket):
                                     # Use safe_send to avoid orphaned task exceptions
                                     loop.call_soon_threadsafe(
                                         asyncio.create_task,
-                                        safe_send(json.dumps({
-                                            "type": "log",
-                                            "line": line
-                                        }))
+                                        safe_send(
+                                            json.dumps({"type": "log", "line": line})
+                                        ),
                                     )
                     except OSError as exc:
                         # OSError 5 = Input/output error (PTY closed) → safe to ignore
@@ -406,7 +442,6 @@ async def handle_client(websocket):
 
                 threading.Thread(target=stream_logs, daemon=True).start()
 
-
                 # ---------------------------------------------------
                 # THREAD: detect process end → send finished
                 # ---------------------------------------------------
@@ -414,7 +449,7 @@ async def handle_client(websocket):
                     nonlocal job_running
                     rc = proc.wait()
                     job_running = False  # Mark job as no longer running
-                    
+
                     # Send completion signal and close connection IMMEDIATELY
                     # Don't wait for fsync - it can take 100-800ms due to CephFS backend issues
                     # This frees up the connection slot for new requests
@@ -422,23 +457,24 @@ async def handle_client(websocket):
                         # Use safe_send to avoid orphaned task exceptions
                         loop.call_soon_threadsafe(
                             asyncio.create_task,
-                            safe_send(json.dumps({
-                                "type": "state",
-                                "status": "finished",
-                                "returncode": rc,
-                                "job_id": job_id,
-                            }))
+                            safe_send(
+                                json.dumps(
+                                    {
+                                        "type": "state",
+                                        "status": "finished",
+                                        "returncode": rc,
+                                        "job_id": job_id,
+                                    }
+                                )
+                            ),
                         )
                         # Clean up request file after successful completion
                         safe_cleanup(request_file)
                         # Use safe_close to avoid exceptions from closing websocket
-                        loop.call_soon_threadsafe(
-                            asyncio.create_task,
-                            safe_close()
-                        )
+                        loop.call_soon_threadsafe(asyncio.create_task, safe_close())
                     except Exception as exc:
                         log.error("Error signaling finished: %s", exc)
-                    
+
                     # NOW do fsync AFTER connection closed (non-blocking for client)
                     # Rationale: Given CephFS backend OSD issues causing 100-800ms fsync delays,
                     # it's better to notify client immediately and free up connection slot.
@@ -447,15 +483,17 @@ async def handle_client(websocket):
                     if rc == 0 and os.path.exists(target_file_path):
                         try:
                             file_size = os.path.getsize(target_file_path)
-                            log.info(f"Starting background sync of output file {target_file_path} (size: {file_size / 1024 / 1024:.2f} MB)")
+                            log.info(
+                                f"Starting background sync of output file {target_file_path} (size: {file_size / 1024 / 1024:.2f} MB)"
+                            )
                             sync_start = time.time()
-                            
+
                             # Open file and explicitly fsync to flush all data to the filesystem
-                            with open(target_file_path, 'rb') as f:
+                            with open(target_file_path, "rb") as f:
                                 os.fsync(f.fileno())
-                            
+
                             sync_duration = time.time() - sync_start
-                            
+
                             # Warn if fsync is unusually slow (potential MDS/OSD issues)
                             if sync_duration > 0.5:  # 500ms threshold
                                 log.warning(
@@ -466,7 +504,9 @@ async def handle_client(websocket):
                                     f"Run 'check-cephfs-health' for detailed diagnostics."
                                 )
                             else:
-                                log.info(f"Output file {target_file_path} successfully synced to CephFS in {sync_duration:.3f} seconds")
+                                log.info(
+                                    f"Output file {target_file_path} successfully synced to CephFS in {sync_duration:.3f} seconds"
+                                )
                         except Exception as e:
                             log.warning(f"Failed to sync output file: {e}")
 
@@ -477,7 +517,9 @@ async def handle_client(websocket):
             # -------------------------
             elif cmd == "kill":
                 if proc and proc.poll() is None:
-                    log.info(f"Killing MARS process for job {job_id} (PID {proc.pid}) at client request")
+                    log.info(
+                        f"Killing MARS process for job {job_id} (PID {proc.pid}) at client request"
+                    )
                     try:
                         # Kill the entire process group
                         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
@@ -485,41 +527,57 @@ async def handle_client(websocket):
                         log.debug(f"Process {proc.pid} already terminated: {e}")
                     job_running = False
                     safe_cleanup(request_file, result_file)
-                    await websocket.send(json.dumps({
-                        "type": "state",
-                        "status": "killed",
-                        "job_id": job_id,
-                    }))
+                    await websocket.send(
+                        json.dumps(
+                            {
+                                "type": "state",
+                                "status": "killed",
+                                "job_id": job_id,
+                            }
+                        )
+                    )
                 else:
-                    await websocket.send(json.dumps({
-                        "type": "state",
-                        "status": "error",
-                        "error": "No running job",
-                    }))
+                    await websocket.send(
+                        json.dumps(
+                            {
+                                "type": "state",
+                                "status": "error",
+                                "error": "No running job",
+                            }
+                        )
+                    )
 
         # EXIT LOOP → JOB FINISHED
         if proc:
             rc = proc.wait()
-            await websocket.send(json.dumps({
-                "type": "state",
-                "status": "finished",
-                "returncode": rc,
-                "job_id": job_id
-            }))
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "state",
+                        "status": "finished",
+                        "returncode": rc,
+                        "job_id": job_id,
+                    }
+                )
+            )
             return
-            
+
     except websockets.exceptions.ConnectionClosedOK:
         # Normal closure (client and server both sent Close 1000)
         log.debug(f"WebSocket from {client_addr} closed normally (1000).")
         if proc and proc.poll() is None:
-            log.info(f"Job {job_id} still running (PID {proc.pid}), terminating due to normal client disconnect")
+            log.info(
+                f"Job {job_id} still running (PID {proc.pid}), terminating due to normal client disconnect"
+            )
         safe_cleanup(request_file)
 
     except websockets.exceptions.ConnectionClosedError as exc:
         # Abnormal close (not 1000)
         log.warning(f"WebSocket from {client_addr} closed unexpectedly: %s", exc)
         if proc and proc.poll() is None:
-            log.warning(f"Job {job_id} still running (PID {proc.pid}), terminating due to abnormal disconnect")
+            log.warning(
+                f"Job {job_id} still running (PID {proc.pid}), terminating due to abnormal disconnect"
+            )
         safe_cleanup(request_file, result_file)
 
     except Exception as exc:
@@ -530,52 +588,64 @@ async def handle_client(websocket):
         # Always cancel heartbeat and cleanup
         if hb_task:
             hb_task.cancel()
-        
+
         # Kill MARS process and its children if still running
         if proc:
             try:
                 if proc.poll() is None:
-                    log.info(f"Cleaning up MARS process (PID {proc.pid}) for job {job_id}")
+                    log.info(
+                        f"Cleaning up MARS process (PID {proc.pid}) for job {job_id}"
+                    )
                     try:
                         # Kill the entire process group (mars + bash + any children)
                         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
                         try:
                             proc.wait(timeout=5)
                         except subprocess.TimeoutExpired:
-                            log.warning(f"Force killing process group (PID {proc.pid}) for job {job_id}")
+                            log.warning(
+                                f"Force killing process group (PID {proc.pid}) for job {job_id}"
+                            )
                             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                             proc.wait()
                     except (ProcessLookupError, OSError) as e:
                         log.debug(f"Process {proc.pid} already terminated: {e}")
-                
+
                 # Remove from active processes tracking
                 with active_processes_lock:
                     active_processes.discard(proc)
             except Exception as e:
                 log.error(f"Error cleaning up process: {e}")
-        
+
         # Decrement active connection count
         with active_connections_lock:
             active_connections -= 1
             current_count = active_connections
-        log.info(f"Connection from {client_addr} closed (active: {current_count}/{MAX_CONCURRENT_CONNECTIONS if MAX_CONCURRENT_CONNECTIONS > 0 else 'unlimited'})")
+        max_conn_str = (
+            str(MAX_CONCURRENT_CONNECTIONS)
+            if MAX_CONCURRENT_CONNECTIONS > 0
+            else "unlimited"
+        )
+        log.info(
+            f"Connection from {client_addr} closed "
+            f"(active: {current_count}/{max_conn_str})"
+        )
 
 
 def cleanup_orphaned_processes():
-    """
-    Kill any orphaned mars/bash processes from previous crashes.
+    """Kill any orphaned mars/bash processes from previous crashes.
+
     This prevents process accumulation during restart loops.
     """
     try:
         # Find orphaned mars processes
         result = subprocess.run(
-            ["pgrep", "-f", "mars.*\.request"],
-            capture_output=True,
-            text=True
+            ["pgrep", "-f", r"mars.*\.request"], capture_output=True, text=True
         )
         if result.returncode == 0 and result.stdout.strip():
-            orphaned_pids = result.stdout.strip().split('\n')
-            log.info(f"Found {len(orphaned_pids)} orphaned mars processes from previous run")
+            orphaned_pids = result.stdout.strip().split("\n")
+            log.info(
+                f"Found {len(orphaned_pids)} orphaned mars processes from previous run"
+            )
             for pid in orphaned_pids:
                 try:
                     # Kill the process group
@@ -589,9 +659,7 @@ def cleanup_orphaned_processes():
 
 
 def kill_all_active_processes():
-    """
-    Kill all active MARS processes. Called on shutdown.
-    """
+    """Kill all active MARS processes. Called on shutdown."""
     with active_processes_lock:
         if active_processes:
             log.info(f"Killing {len(active_processes)} active MARS processes")
@@ -607,15 +675,13 @@ def kill_all_active_processes():
 
 
 def start_ws_server(host="0.0.0.0", port=9001):
-    """
-    Start the WebSocket server. Called from __main__.
-    """
+    """Start the WebSocket server. Called from __main__."""
     logging.basicConfig(level=logging.INFO)
-    
+
     # Clean up any orphaned processes from previous crashes
     log.info("Checking for orphaned processes from previous run...")
     cleanup_orphaned_processes()
-    
+
     # Check CephFS health and report issues
     log.info("Checking CephFS health...")
     cephfs_health = check_cephfs_health()
@@ -631,11 +697,13 @@ def start_ws_server(host="0.0.0.0", port=9001):
             )
     else:
         log.warning("No CephFS mount detected - file sync may not work correctly")
-    
+
     log.info(f"Starting MARS WebSocket server on ws://{host}:{port}")
     if MAX_CONCURRENT_CONNECTIONS > 0:
         log.info(f"Max concurrent connections: {MAX_CONCURRENT_CONNECTIONS}")
     else:
-        log.info("Max concurrent connections: unlimited (configure MARS_MAX_CONCURRENT_CONNECTIONS to set a limit)")
-    
+        log.info(
+            "Max concurrent connections: unlimited (configure MARS_MAX_CONCURRENT_CONNECTIONS to set a limit)"
+        )
+
     return websockets.serve(handle_client, host, port)

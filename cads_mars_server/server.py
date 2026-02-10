@@ -288,21 +288,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     LOG.error(f"{uid} Sending error message in header")
                     send_header(status, **kwargs)
                     self.wfile.write(json.dumps(kwargs).encode())
-                    LOG.error(f"Error message sent in stream: {json.dumps(kwargs)}", exc_info=True)
+                    LOG.error(
+                        f"Error message sent in stream: {json.dumps(kwargs)}",
+                        exc_info=True,
+                    )
                 else:
                     LOG.error(f"{uid} Sending error message in stream")
                     self.wfile.write("4\r\nEROR\r\n".encode())
                     message = json.dumps(kwargs)
                     self.wfile.write(f"{len(message):x}\r\n{message}\r\n".encode())
                     self.wfile.write("0\r\n\r\n".encode())
-                    
+
                     LOG.error(f"Error message sent in stream: {message}", exc_info=True)
 
             LOG.info(f"{uid} MARS process completed successfully")
             with open(os.path.join(self.logdir, f"{uid}.log"), "r") as logf:
                 mars_log = logf.read()
                 LOG.info(f"MARS log for {uid}:\n{mars_log}")
-            
+
         elapsed = time.time() - start
         LOG.info(
             f" {uid} Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total / elapsed)}, chunks: {count:,}"

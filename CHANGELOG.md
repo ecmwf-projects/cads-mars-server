@@ -23,6 +23,7 @@ The new WebSocket-based architecture provides significant advantages over tradit
 - **Simplified connection management**: Automatic reconnection and failover built into the protocol
 
 Traditional HTTP polling would require:
+
 - Periodic status check requests (wasted bandwidth, server load)
 - Delayed notifications (polling interval limits responsiveness)
 - Complex state management on server for status queries
@@ -30,23 +31,26 @@ Traditional HTTP polling would require:
 
 WebSocket provides a natural fit for the workflow: submit job â†’ stream logs â†’ receive result.
 
----
+______________________________________________________________________
 
 #### Core Features
 
 - **WebSocket-based MARS client** (`ws_client.py`, `ws_server.py`) for shared filesystem deployments
+
   - Asynchronous request handling with server-side job monitoring
   - Connection pooling with automatic failover across multiple servers
   - Real-time log streaming from MARS processes to clients
   - Bidirectional communication for job control (kill, heartbeat)
   - Configurable retry logic and connection timeouts
-  
+
 - **Modal client selection via `USE_SHARES` configuration**
+
   - `MARS_USE_SHARES=false` (default): Traditional pipe-based client (fully backward compatible)
   - `MARS_USE_SHARES=true`: WebSocket client for shared filesystem deployments
   - Configuration via environment variable or YAML file (`/etc/cads-mars-server.yaml`)
 
 - **Client-side log filtering** ([LOG_FILTERING.md](docs/LOG_FILTERING.md))
+
   - Reduces noise from verbose MARS output
   - Pattern-based filtering (errors, warnings, progress indicators)
   - Message deduplication for repeated lines
@@ -58,6 +62,7 @@ WebSocket provides a natural fit for the workflow: submit job â†’ stream logs â†
   - Controlled via `CLIENT_FILTER_LOGS` config (default: enabled)
 
 - **CephFS health diagnostics** ([CEPHFS_ARCHITECTURE.md](docs/CEPHFS_ARCHITECTURE.md))
+
   - `check-cephfs-health` console script for diagnosing filesystem issues
   - Documentation of CephFS architecture (MON/MDS/OSD components)
   - Startup health checks with warnings for detected issues
@@ -65,12 +70,14 @@ WebSocket provides a natural fit for the workflow: submit job â†’ stream logs â†
 ### Fixed
 
 - **Process group management for WebSocket server**
+
   - Properly terminates entire process groups (parent + bash + MARS + children)
   - Prevents orphaned processes during restarts or crashes
   - Graceful shutdown with SIGTERM/SIGINT signal handlers
   - Startup cleanup of orphaned processes from previous runs
 
 - **WebSocket connection handling**
+
   - Moved filesystem sync operations after connection close to prevent blocking
   - Improved connection resource management during slow storage operations
 
@@ -94,6 +101,7 @@ WebSocket provides a natural fit for the workflow: submit job â†’ stream logs â†
 #### To Adopt WebSocket Mode
 
 WebSocket mode requires:
+
 - Shared filesystem accessible by both clients and servers
 - WebSocket server(s) running on worker nodes
 - Network connectivity between clients and servers
@@ -134,7 +142,7 @@ See [README.md](README.md) for complete deployment examples.
 - **Shared filesystem required**: WebSocket mode assumes client and server have access to the same filesystem paths
 - **Custom log handlers**: Must be `async` functions (default filtering works without changes)
 
----
+______________________________________________________________________
 
 ## [0.2.5.1] - Previous Release
 

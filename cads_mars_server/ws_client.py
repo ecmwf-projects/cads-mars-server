@@ -2,18 +2,18 @@ import asyncio
 import json
 import os
 import random
-from typing import Any, Iterable, Optional, Callable
+from typing import Any, Iterable, Optional
 
 import websockets
 
 from cads_mars_server.client import Result
 from cads_mars_server.config import (
-    RETRY_DELAY,
+    CLIENT_FILTER_LOGS,
     MAX_RETRIES,
     REQUEST_TIMEOUT,
-    WS_PING_INTERVAL,
+    RETRY_DELAY,
     WS_CLOSE_TIMEOUT,
-    CLIENT_FILTER_LOGS,
+    WS_PING_INTERVAL,
 )
 from cads_mars_server.log_filter import (
     LogHandler,
@@ -62,7 +62,7 @@ async def _run_one_server(
             if mtype == "log":
                 line = msg.get("line", "")
                 logs.append(line)  # Always store raw line
-                
+
                 # Process log line with custom handler
                 if log_handler:
                     try:
@@ -70,9 +70,9 @@ async def _run_one_server(
                         if display_line:
                             if logger:
                                 # Use appropriate log level based on content
-                                if '❌' in display_line:
+                                if "❌" in display_line:
                                     logger.error(display_line)
-                                elif '⚠️' in display_line:
+                                elif "⚠️" in display_line:
                                     logger.warning(display_line)
                                 else:
                                     logger.info(display_line)
@@ -115,7 +115,9 @@ async def _run_one_server(
                     if returncode != 0:
                         logs.append(f"ERROR: job finished with returncode={returncode}")
                         return Result(
-                            error=RuntimeError(f"MARS job failed (returncode={returncode})"),
+                            error=RuntimeError(
+                                f"MARS job failed (returncode={returncode})"
+                            ),
                             message="\n".join(logs),
                         )
                     return Result(error=None, message="\n".join(logs))
@@ -146,7 +148,7 @@ async def mars_via_ws(
 ) -> Result:
     """
     Execute a MARS retrieval via websocket servers.
-    
+
     Args:
         server_list: List of WebSocket server URLs to try
         requests: MARS request dict or list of dicts
@@ -170,7 +172,7 @@ async def mars_via_ws(
         if filter_logs is None:
             filter_logs = CLIENT_FILTER_LOGS
         log_handler = create_default_log_handler(filter_logs=filter_logs)
-    
+
     reqs = requests if isinstance(requests, list) else [requests]
 
     servers = list(server_list)
@@ -183,7 +185,14 @@ async def mars_via_ws(
             try:
                 # Apply an overall timeout to each server attempt.
                 last_result = await asyncio.wait_for(
-                    _run_one_server(ws_url, reqs, environ, target, logger=logger, log_handler=log_handler),
+                    _run_one_server(
+                        ws_url,
+                        reqs,
+                        environ,
+                        target,
+                        logger=logger,
+                        log_handler=log_handler,
+                    ),
                     timeout=REQUEST_TIMEOUT,
                 )
                 # If the server returned an error, we try the next server (or next retry cycle).
@@ -232,13 +241,13 @@ def mars_via_ws_sync(
 ) -> Result:
     return asyncio.run(
         mars_via_ws(
-            server_list, 
-            requests, 
-            environ, 
-            target, 
-            logger=logger, 
+            server_list,
+            requests,
+            environ,
+            target,
+            logger=logger,
             filter_logs=filter_logs,
-            log_handler=log_handler
+            log_handler=log_handler,
         )
     )
 
