@@ -184,7 +184,9 @@ class MarsLogParser:
                 self.repeat_count = 1
                 # Return both the summary and new line
                 if prev:
-                    return f"... (previous message repeated {total} total times)\n{line}"
+                    return (
+                        f"... (previous message repeated {total} total times)\n{line}"
+                    )
                 return line
 
             self.last_line = line
@@ -266,7 +268,7 @@ def create_default_log_handler(filter_logs: bool = True) -> LogHandler:
     parser = MarsLogParser(show_all=not filter_logs)
 
     async def handler(line: str, ws: Any, logger: Any) -> Optional[str]:
-        """Default log handler using MarsLogParser."""
+        """Default log handler using MarsLogParser."""  # noqa: D401
         if not filter_logs:
             return line
 

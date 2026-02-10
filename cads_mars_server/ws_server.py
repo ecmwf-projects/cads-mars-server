@@ -35,6 +35,7 @@ active_processes_lock = threading.Lock()
 def check_cephfs_health():
     """
     Check CephFS health and report MDS/OSD connection issues.
+
     Returns dict with health info and warnings.
 
     Note: OSD connection errors (like 'osd583 10.106.20.41:6971 socket closed')
@@ -167,7 +168,8 @@ def safe_cleanup(*paths):
 
 async def handle_client(websocket):
     """
-    Protocol:
+    Protocol.
+
         Client → Server:
             {"cmd": "start", "requests": [...], "environ": {...}, "target": "..."}
             {"cmd": "kill"}
@@ -191,7 +193,7 @@ async def handle_client(websocket):
             and active_connections >= MAX_CONCURRENT_CONNECTIONS
         ):
             log.warning(
-                f"Connection limit reached ({MAX_CONCURRENT_CONNECTIONS}), rejecting connection from {client_addr}"
+                f"Connection limit reached ({MAX_CONCURRENT_CONNECTIONS}), rejecting connection from {client_addr}"  # noqa: E501
             )
             await websocket.close(
                 1008, f"Server at capacity ({MAX_CONCURRENT_CONNECTIONS} connections)"
@@ -201,7 +203,7 @@ async def handle_client(websocket):
         current_count = active_connections
 
     log.info(
-        f"New WebSocket connection from {client_addr} (active: {current_count}/{MAX_CONCURRENT_CONNECTIONS if MAX_CONCURRENT_CONNECTIONS > 0 else 'unlimited'})"
+        f"New WebSocket connection from {client_addr} (active: {current_count}/{MAX_CONCURRENT_CONNECTIONS if MAX_CONCURRENT_CONNECTIONS > 0 else 'unlimited'})"  # noqa: E501
     )
 
     loop = asyncio.get_running_loop()
@@ -218,6 +220,7 @@ async def handle_client(websocket):
     async def safe_send(message):
         """
         Send message, catching normal connection close exceptions.
+
         Use this for sends from threads to avoid orphaned task exceptions.
         Do NOT use in heartbeat_task - it needs ConnectionClosed to propagate for cleanup.
         """
@@ -277,7 +280,7 @@ async def handle_client(websocket):
                 # Client disconnected - kill MARS process if running
                 if job_running and proc and proc.poll() is None:
                     log.warning(
-                        f"Client {client_addr} disconnected while job {job_id} running (PID {proc.pid}). Terminating MARS process."
+                        f"Client {client_addr} disconnected while job {job_id} running (PID {proc.pid}). Terminating MARS process."  # noqa: E501
                     )
                     try:
                         # Kill the entire process group
@@ -352,7 +355,7 @@ async def handle_client(websocket):
                 job_id = environ["request_id"]
 
                 log.info(
-                    f"Request received: {len(requests)} request(s) for job {job_id} to be executed in {workdir}"
+                    f"Request received: {len(requests)} request(s) for job {job_id} to be executed in {workdir}"  # noqa: E501
                 )
 
                 setproctitle.setproctitle(f"cads_mars_server {job_id}")
@@ -484,7 +487,7 @@ async def handle_client(websocket):
                         try:
                             file_size = os.path.getsize(target_file_path)
                             log.info(
-                                f"Starting background sync of output file {target_file_path} (size: {file_size / 1024 / 1024:.2f} MB)"
+                                f"Starting background sync of output file {target_file_path} (size: {file_size / 1024 / 1024:.2f} MB)"  # noqa: E501
                             )
                             sync_start = time.time()
 
@@ -497,15 +500,15 @@ async def handle_client(websocket):
                             # Warn if fsync is unusually slow (potential MDS/OSD issues)
                             if sync_duration > 0.5:  # 500ms threshold
                                 log.warning(
-                                    f"⚠️  SLOW FSYNC: {sync_duration:.3f}s for {target_file_path} "
+                                    f"⚠️  SLOW FSYNC: {sync_duration:.3f}s for {target_file_path} "  # noqa: E501
                                     f"({file_size / 1024 / 1024:.2f} MB) - CephFS storage backend issue. "
-                                    f"This typically indicates OSD connection problems (reconnects/failovers). "
+                                    f"This typically indicates OSD connection problems (reconnects/failovers). "  # noqa: E501
                                     f"Check 'dmesg -T | grep -i ceph' for OSD socket errors. "
                                     f"Run 'check-cephfs-health' for detailed diagnostics."
                                 )
                             else:
                                 log.info(
-                                    f"Output file {target_file_path} successfully synced to CephFS in {sync_duration:.3f} seconds"
+                                    f"Output file {target_file_path} successfully synced to CephFS in {sync_duration:.3f} seconds"  # noqa: E501
                                 )
                         except Exception as e:
                             log.warning(f"Failed to sync output file: {e}")

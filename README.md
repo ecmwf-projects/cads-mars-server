@@ -96,10 +96,10 @@ from cads_adaptors.adaptors.mars import execute_mars
 
 # Now uses WebSocket client with automatic failover
 result = execute_mars(
-    request={"class": "ea", "date": "20240101", ...},
+    request={"class": "ea", "date": "20240101"},  # Add more parameters as needed
     context=context,
     target_fname="output.grib",
-    target_dir="/shared/filesystem/path"  # Must be accessible by servers
+    target_dir="/shared/filesystem/path",  # Must be accessible by servers
 )
 ```
 
@@ -159,12 +159,14 @@ from cads_adaptors.adaptors.mars import execute_mars
 # Use default filtering (shows errors, warnings, progress)
 result = execute_mars(request, context=context)
 
+
 # Inject custom log handler
 async def my_handler(line: str, ws, logger) -> Optional[str]:
     if "FATAL" in line:
         await ws.send(json.dumps({"cmd": "kill"}))
         raise RuntimeError(f"Aborted: {line}")
     return line if "ERROR" in line else None
+
 
 result = execute_mars(request, context=context, log_handler=my_handler)
 ```
