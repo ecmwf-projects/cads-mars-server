@@ -27,6 +27,15 @@ name = "cads-mars-server"
 readme = "README.md"
 requires-python = ">=3.11"
 
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.0",
+  "types-requests",
+  "pre-commit",
+  "pytest",
+  "pytest-cov"
+]
+
 [project.scripts]
 cads-mars-server = "cads_mars_server.__main__:mars_cli"
 check-cephfs-health = "scripts.check_cephfs_health:main"
