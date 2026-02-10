@@ -207,6 +207,8 @@ async def combined_handler(line: str, ws: Any, logger: Any) -> Optional[str]:
             return f"💾❌ {line}"
 
     # Use default handler for everything else
+    from cads_mars_server.log_filter import create_default_log_handler
+
     default = create_default_log_handler(filter_logs=True)
     return await default(line, ws, logger)
 

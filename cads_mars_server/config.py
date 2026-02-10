@@ -33,7 +33,7 @@ def _load_yaml_config() -> dict[str, Any]:
         return {}
 
     try:
-        import yaml
+        import yaml  # type: ignore[import-untyped]
 
         with open(config_path) as f:
             config = yaml.safe_load(f) or {}

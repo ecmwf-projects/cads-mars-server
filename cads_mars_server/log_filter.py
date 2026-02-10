@@ -10,6 +10,7 @@ Custom log handlers can be injected to:
 """
 
 import re
+from collections.abc import Coroutine
 from typing import Any, Callable, List, Optional, Protocol
 
 
@@ -50,8 +51,8 @@ class LogHandlerProtocol(Protocol):
     async def __call__(self, line: str, ws: Any, logger: Any) -> Optional[str]: ...
 
 
-# Type alias for backward compatibility
-LogHandler = Callable[[str, Any, Any], Optional[str]]
+# Type alias for log handler callables (must be async)
+LogHandler = Callable[[str, Any, Any], Coroutine[Any, Any, Optional[str]]]
 
 
 class MarsLogParser:
@@ -177,12 +178,14 @@ class MarsLogParser:
             # New line, reset counter
             if self.repeat_count > self.max_repeats:
                 # Show final count for previous suppressed line
-                prev = self.last_line
+                prev: Optional[str] = self.last_line
                 total = self.repeat_count
                 self.last_line = line
                 self.repeat_count = 1
                 # Return both the summary and new line
-                return f"... (previous message repeated {total} total times)\n{line}"
+                if prev:
+                    return f"... (previous message repeated {total} total times)\n{line}"
+                return line
 
             self.last_line = line
             self.repeat_count = 1

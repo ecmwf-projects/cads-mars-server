@@ -200,7 +200,7 @@ async def mars_via_ws(
                     return last_result
             except (
                 websockets.exceptions.ConnectionClosedError,
-                websockets.exceptions.InvalidStatusCode,
+                websockets.exceptions.InvalidStatus,
                 ConnectionRefusedError,
                 TimeoutError,
                 asyncio.TimeoutError,
