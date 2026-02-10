@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 import setproctitle
-import websockets
+import websockets  # type: ignore[import-untyped]
 
 from cads_mars_server.config import (
     DEBUG_MODE,

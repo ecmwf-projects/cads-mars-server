@@ -4,7 +4,7 @@ import os
 import random
 from typing import Any, Iterable, Optional
 
-import websockets
+import websockets  # type: ignore[import-untyped]
 
 from cads_mars_server.client import Result
 from cads_mars_server.config import (

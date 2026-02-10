@@ -114,7 +114,7 @@ class MarsLogParser:
         ]
 
         # Track repeated messages
-        self.last_line = None
+        self.last_line: Optional[str] = None
         self.repeat_count = 0
         self.max_repeats = 3  # Show first 3 occurrences, then suppress
 
