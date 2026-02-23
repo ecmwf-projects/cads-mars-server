@@ -213,10 +213,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if self.rfile in ready:
                     LOG.error("Client closed connection")
                     try:
-                        LOG.error("Killing mars process %s", pid)
+                        LOG.error(f"{uid} Killing mars process {pid}")
                         os.kill(pid, signal.SIGKILL)
                     except Exception as e:
-                        LOG.error("Error killing mars process %s", e)
+                        LOG.error(f"{uid} Error killing mars process {pid}: {e}")
                         pass
                     raise IOError("Client closed connection")
 
@@ -234,11 +234,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self.wfile.write(data)
                 except IOError:
                     try:
-                        LOG.error("Error sending data")
-                        LOG.error("Killing mars process %s", pid)
+                        LOG.error(f"{uid} Error sending data")
+                        LOG.error(f"{uid} Killing mars process {pid}")
                         os.kill(pid, signal.SIGKILL)
                     except Exception as e:
-                        LOG.error("Error killing mars process %s", e)
+                        LOG.error(f"{uid} Error killing mars process {pid}: {e}")
                         pass
                     raise
                 signal.alarm(0)
@@ -246,7 +246,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 count += 1
 
         except:
-            LOG.exception("Error sending data")
+            LOG.exception(f"{uid} Error sending data")
             raise
 
         finally:
@@ -283,21 +283,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     )
                     kwargs["retry_same_host"] = False
 
-                LOG.error("MARS exited in error %s", kwargs)
+                LOG.error(f"{uid} MARS exited in error %s", kwargs)
                 if count == 0:
-                    LOG.error("Sending error message in header")
+                    LOG.error(f"{uid} Sending error message in header")
                     send_header(status, **kwargs)
                     self.wfile.write(json.dumps(kwargs).encode())
+                    LOG.error(
+                        f"Error message sent in stream: {json.dumps(kwargs)}",
+                        exc_info=True,
+                    )
                 else:
-                    LOG.error("Sending error message in stream")
+                    LOG.error(f"{uid} Sending error message in stream")
                     self.wfile.write("4\r\nEROR\r\n".encode())
                     message = json.dumps(kwargs)
                     self.wfile.write(f"{len(message):x}\r\n{message}\r\n".encode())
                     self.wfile.write("0\r\n\r\n".encode())
 
+                    LOG.error(f"Error message sent in stream: {message}", exc_info=True)
+
+            LOG.info(f"{uid} MARS process completed successfully")
+            with open(os.path.join(self.logdir, f"{uid}.log"), "r") as logf:
+                mars_log = logf.read()
+                LOG.info(f"MARS log for {uid}:\n{mars_log}")
+
         elapsed = time.time() - start
         LOG.info(
-            f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total / elapsed)}, chunks: {count:,}"
+            f" {uid} Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total / elapsed)}, chunks: {count:,}"
         )
 
     def do_GET(self):
