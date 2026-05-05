@@ -205,17 +205,20 @@ class MarsLogParser:
         -------
             Formatted line
         """
-        # Check for error/warning keywords and add markers
-        line_lower = line.lower()
-
-        if "error" in line_lower or "failed" in line_lower or "fatal" in line_lower:
-            return f"❌ {line}"
-        elif "warning" in line_lower or "warn" in line_lower:
-            return f"⚠️  {line}"
-        elif "success" in line_lower or "complete" in line_lower:
-            return f"✓ {line}"
-
-        return line
+        # Ensure every character can be encoded as ASCII or at least UTF-8.
+        # Replace any offending characters with [x].
+        sanitized = []
+        for ch in line:
+            try:
+                ch.encode("ascii")
+                sanitized.append(ch)
+            except UnicodeEncodeError:
+                try:
+                    ch.encode("utf-8")
+                    sanitized.append(ch)
+                except UnicodeEncodeError:
+                    sanitized.append("[x]")
+        return "".join(sanitized)
 
 
 # Convenience function for simple parsing
