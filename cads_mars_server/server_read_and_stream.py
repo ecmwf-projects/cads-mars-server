@@ -136,6 +136,7 @@ def run_mars(*, mars_executable, request, uid, logdir, environ, datadir):
         if v is not None:
             env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
     env.setdefault("MARS_ENVIRON_REQUEST_ID", uid)
+    env.update({"MARS_AUTO_SPLIT_BY_DATES": "1"})
 
     os.execlpe(mars_executable, mars_executable, env)
 
