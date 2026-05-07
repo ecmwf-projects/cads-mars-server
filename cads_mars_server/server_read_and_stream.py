@@ -44,17 +44,45 @@ def validate_uuid(uid):
 
 
 # --------------------------------------------------------------------------- #
+# Data-directory resolution — distribute across shared volumes
+# --------------------------------------------------------------------------- #
+
+def _resolve_datadir(uid, shared_root, shares, cache_folder):
+    """Return a data directory for *uid*, spreading across *shares*.
+
+    The path is ``{shared_root}/{share}/{cache_folder}`` where *share* is
+    chosen from *shares* using a hash of *uid* so that requests are evenly
+    distributed.  If no share is usable (missing / not a directory) the
+    function falls back to ``/tmp``.
+    """
+    if shares:
+        idx = hash(uid) % len(shares)
+        ordered = shares[idx:] + shares[:idx]
+        for share in ordered:
+            candidate = os.path.join(shared_root, share, cache_folder)
+            parent = os.path.join(shared_root, share)
+            if os.path.isdir(parent):
+                os.makedirs(candidate, exist_ok=True)
+                LOG.info(f"{uid} Using data directory: {candidate}")
+                return candidate
+            LOG.warning(f"{uid} Share volume not available: {parent}")
+
+    LOG.warning(f"{uid} No shared volumes available, falling back to /tmp")
+    return tempfile.mkdtemp(prefix="mars_stream_")
+
+
+# --------------------------------------------------------------------------- #
 # Request handling — reuse the same tidying logic from server.py
 # --------------------------------------------------------------------------- #
 from .server import tidy  # noqa: E402
 
 
 def run_mars(*, mars_executable, request, uid, logdir, environ, datadir):
-    """Fork and exec MARS, writing output to *datadir*/<uid>.data.
+    """Fork and exec MARS, writing output to *datadir*/<uid>.grib.
 
     Returns (target_path, pid).
     """
-    target_path = os.path.join(datadir, f"{uid}.data")
+    target_path = os.path.join(datadir, f"{uid}.grib")
 
     request_pipe_r, request_pipe_w = os.pipe()
     os.set_inheritable(request_pipe_r, True)
@@ -125,7 +153,9 @@ STREAM_CHUNK_SIZE = 1024 * 1024  # 1 MiB
 
 class Handler(http.server.BaseHTTPRequestHandler):
     logdir = "."
-    datadir = "."
+    shared_root = "/cache"
+    shares = []
+    cache_folder = "mars_data"
     timeout = 30
     mars_executable = "/usr/local/bin/mars"
     wbufsize = 1024 * 1024
@@ -149,36 +179,44 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         setproctitle.setproctitle(f"cads_mars_server_stream {uid}")
 
+        datadir = _resolve_datadir(
+            uid, self.shared_root, self.shares, self.cache_folder,
+        )
+
         target_path, pid = run_mars(
             mars_executable=self.mars_executable,
             request=request,
             uid=uid,
             logdir=self.logdir,
             environ=environ,
-            datadir=self.datadir,
+            datadir=datadir,
         )
 
-        # ---- wait for MARS to finish ----
-        _, status = os.waitpid(pid, 0)
+        logfile = os.path.join(self.logdir, f"{uid}.log")
 
-        exit_info = self._decode_exit(status)
+        try:
+            # ---- wait for MARS to finish ----
+            _, status = os.waitpid(pid, 0)
 
-        if exit_info["error"]:
-            self._send_error_response(uid, exit_info)
+            exit_info = self._decode_exit(status)
+
+            if exit_info["error"]:
+                self._send_error_response(uid, exit_info)
+                return
+
+            # ---- MARS succeeded — stream the file back ----
+            if not os.path.exists(target_path):
+                LOG.error(f"{uid} MARS succeeded but output file missing: {target_path}")
+                self._send_error_response(
+                    uid,
+                    {"code": 500, "message": "exited", "value": 1, "error": True},
+                )
+                return
+
+            self._stream_file(uid, target_path)
+        finally:
             self._cleanup_data(target_path)
-            return
-
-        # ---- MARS succeeded — stream the file back ----
-        if not os.path.exists(target_path):
-            LOG.error(f"{uid} MARS succeeded but output file missing: {target_path}")
-            self._send_error_response(
-                uid,
-                {"code": 500, "message": "exited", "value": 1, "error": True},
-            )
-            return
-
-        self._stream_file(uid, target_path)
-        self._cleanup_data(target_path)
+            self._cleanup_data(logfile)
 
     # ------------------------------------------------------------------ GET
     def do_GET(self):
@@ -382,7 +420,9 @@ def setup_server(
     port,
     timeout=30,
     logdir=".",
-    datadir=None,
+    shared_root=None,
+    shares=None,
+    cache_folder=None,
 ):
     """Create and return a ready-to-serve HTTP server.
 
@@ -396,29 +436,49 @@ def setup_server(
         Send-data timeout (seconds).
     logdir : str
         Directory for MARS log files.
-    datadir : str | None
-        Directory where MARS writes its output file.  Defaults to a
-        temporary directory managed by the OS.
+    shared_root : str | None
+        Root of the shared volumes.  Read from config if *None*.
+    shares : list[str] | None
+        List of volume names under *shared_root*.  Read from config if *None*.
+    cache_folder : str | None
+        Sub-folder inside each share for MARS data.  Read from config if *None*.
     """
-    if datadir is None:
-        datadir = tempfile.mkdtemp(prefix="mars_stream_")
-        LOG.info(f"Using temporary data directory: {datadir}")
+    from .config import (
+        CACHE_FOLDER as _cfg_cache_folder,
+        SHARED_ROOT as _cfg_shared_root,
+        SHARES as _cfg_shares,
+    )
 
-    os.makedirs(datadir, exist_ok=True)
+    if shared_root is None:
+        shared_root = str(_cfg_shared_root)
+    if shares is None:
+        shares = _cfg_shares
+    if cache_folder is None:
+        cache_folder = _cfg_cache_folder
+
     os.makedirs(logdir, exist_ok=True)
+
+    LOG.info(
+        f"Stream server: shared_root={shared_root}, "
+        f"shares={shares}, cache_folder={cache_folder}"
+    )
 
     _ = {
         "mars_executable": mars_executable,
         "timeout": timeout,
         "logdir": logdir,
-        "datadir": datadir,
+        "shared_root": shared_root,
+        "shares": shares,
+        "cache_folder": cache_folder,
     }
 
     class ThisHandler(Handler):
         timeout = _["timeout"]
         mars_executable = _["mars_executable"]
         logdir = _["logdir"]
-        datadir = _["datadir"]
+        shared_root = _["shared_root"]
+        shares = _["shares"]
+        cache_folder = _["cache_folder"]
 
     server = ForkingHTTPServer((host, port), ThisHandler)
     return server

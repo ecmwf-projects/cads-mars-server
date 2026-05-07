@@ -183,9 +183,18 @@ def this_server(
     default=".",
 )
 @click.option(
-    "--datadir",
-    "-d",
-    help="Directory where MARS writes output files (default: OS temp dir)",
+    "--shared-root",
+    help="Root of shared volumes (default: from config or /cache)",
+    default=None,
+)
+@click.option(
+    "--shares",
+    help="Comma-separated list of volume names under shared-root (default: from config)",
+    default=None,
+)
+@click.option(
+    "--cache-folder",
+    help="Sub-folder inside each share for MARS data (default: from config or mars_data)",
     default=None,
 )
 @click.option(
@@ -200,13 +209,24 @@ def this_server(
     default=False,
 )
 def stream_server(
-    mars_executable, host, port, timeout, logdir, datadir, pidfile, daemonize
+    mars_executable, host, port, timeout, logdir,
+    shared_root, shares, cache_folder,
+    pidfile, daemonize,
 ) -> None:
     """Set up a MARS server that writes to file then streams back to the client."""
-    logger.info(f"Starting Stream Server {host}:{port} logdir={logdir} datadir={datadir}")
+    if shares is not None:
+        shares = [s.strip() for s in shares.split(",") if s.strip()]
+
+    logger.info(
+        f"Starting Stream Server {host}:{port} logdir={logdir} "
+        f"shared_root={shared_root} shares={shares} cache_folder={cache_folder}"
+    )
 
     _server = server_read_and_stream.setup_server(
-        mars_executable, host, port, timeout, logdir, datadir
+        mars_executable, host, port, timeout, logdir,
+        shared_root=shared_root,
+        shares=shares,
+        cache_folder=cache_folder,
     )
 
     if daemonize:

@@ -20,6 +20,21 @@ shares_port: 9001
 shared_root: /cache
 
 # ============================================================================
+# Stream Server — Shared Volume Configuration
+# ============================================================================
+
+# List of volume names under shared_root.  The stream server distributes
+# requests across these volumes to avoid hot-spotting a single mount.
+# If none are available at runtime, falls back to /tmp.
+# shares:
+#   - share01
+#   - share02
+#   - share03
+
+# Sub-folder inside each share used for MARS output data
+# cache_folder: mars_data
+
+# ============================================================================
 # WebSocket Configuration
 # ============================================================================
 
