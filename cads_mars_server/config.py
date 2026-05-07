@@ -106,7 +106,7 @@ DEFAULT_PIPE_PORT = _get_config("MARS_PIPE_PORT", "pipe_port", 9000, int)
 DEFAULT_SHARES_PORT = _get_config("MARS_SHARES_PORT", "shares_port", 9001, int)
 
 # Shared filesystem configuration (for shares/websocket mode)
-SHARED_ROOT = _get_config("MARS_SHARED_ROOT", "shared_root", "/cache", Path)
+SHARED_ROOT = _get_config("MARS_SHARED_ROOT", "CACHE_ROOT", "/cache", Path)
 
 # List of shared volume names under SHARED_ROOT (for stream server mode)
 # Each volume is a subdirectory of SHARED_ROOT.  Requests are distributed
@@ -121,7 +121,7 @@ else:
     SHARES = []
 
 # Sub-folder inside each share used for MARS output data
-CACHE_FOLDER = _get_config("MARS_CACHE_FOLDER", "cache_folder", "mars_data", str)
+CACHE_FOLDER = _get_config("MARS_CACHE_FOLDER", "CACHE_FOLDER", "mars", str)
 
 # ============================================================================
 # WebSocket Configuration
