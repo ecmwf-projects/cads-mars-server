@@ -74,6 +74,11 @@ def _resolve_datadir(uid, shared_root, shares, cache_folder):
 # --------------------------------------------------------------------------- #
 # Request handling — reuse the same tidying logic from server.py
 # --------------------------------------------------------------------------- #
+from .config import (
+    CACHE_FOLDER as _cfg_cache_folder,
+    SHARED_ROOT as _cfg_shared_root,
+    SHARES as _cfg_shares,
+)
 from .server import tidy  # noqa: E402
 
 
@@ -153,9 +158,9 @@ STREAM_CHUNK_SIZE = 1024 * 1024  # 1 MiB
 
 class Handler(http.server.BaseHTTPRequestHandler):
     logdir = "."
-    shared_root = "/cache"
-    shares = []
-    cache_folder = "mars_data"
+    shared_root = str(_cfg_shared_root)
+    shares = _cfg_shares
+    cache_folder = _cfg_cache_folder
     timeout = 30
     mars_executable = "/usr/local/bin/mars"
     wbufsize = 1024 * 1024
@@ -443,12 +448,6 @@ def setup_server(
     cache_folder : str | None
         Sub-folder inside each share for MARS data.  Read from config if *None*.
     """
-    from .config import (
-        CACHE_FOLDER as _cfg_cache_folder,
-        SHARED_ROOT as _cfg_shared_root,
-        SHARES as _cfg_shares,
-    )
-
     if shared_root is None:
         shared_root = str(_cfg_shared_root)
     if shares is None:
