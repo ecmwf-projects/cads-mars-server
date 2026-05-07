@@ -321,7 +321,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
                 signal.alarm(20)
                 try:
+                    self.wfile.write(f"{len(chunk):x}\r\n".encode())
                     self.wfile.write(chunk)
+                    self.wfile.write(b"\r\n")
                 except IOError:
                     LOG.error(f"{uid} Error streaming data to client")
                     raise
@@ -331,7 +333,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 count += 1
 
         # Send ENDR marker so the client knows the transfer is complete
-        self.wfile.write(b"ENDR")
+        self.wfile.write(b"4\r\nENDR\r\n")
 
         # Chunked-encoding terminator
         self.wfile.write(b"0\r\n\r\n")
