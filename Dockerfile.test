@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+WORKDIR /src
+
+# Install system deps needed for building C extensions
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy only dependency info first for better layer caching
+COPY pyproject.toml setup.cfg environment.yml ./
+COPY cads_mars_server/version.py cads_mars_server/version.py
+COPY cads_mars_server/__init__.py cads_mars_server/__init__.py
+
+# Install the package with dev extras
+RUN pip install --no-cache-dir -e ".[dev]"
+
+# Copy the rest of the source
+COPY . .
+
+# Make fake_mars executable
+RUN chmod +x tests/fake_mars.py
+
+# Default: run all tests including integration
+CMD ["python", "-m", "pytest", "-v", "--tb=short", "--cov=cads_mars_server", "--cov-report=term-missing"]

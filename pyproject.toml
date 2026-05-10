@@ -44,6 +44,12 @@ ws-mars-server = "cads_mars_server.ws_main:main"
 [tool.coverage.run]
 branch = true
 
+[tool.pytest.ini_options]
+markers = [
+    "requires_linux: test requires Linux (fork-based servers crash on macOS)",
+]
+testpaths = ["tests"]
+
 [tool.mypy]
 strict = false
 
