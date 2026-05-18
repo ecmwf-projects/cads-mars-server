@@ -55,6 +55,10 @@ def _resolve_datadir(uid, shared_root, shares, cache_folder):
     distributed.  If no share is usable (missing / not a directory) the
     function falls back to ``/tmp``.
     """
+    LOG.info(
+        "%s _resolve_datadir called: shared_root=%s shares=%s cache_folder=%s",
+        uid, shared_root, shares, cache_folder,
+    )
     if shares:
         idx = hash(uid) % len(shares)
         ordered = shares[idx:] + shares[:idx]
@@ -65,7 +69,9 @@ def _resolve_datadir(uid, shared_root, shares, cache_folder):
                 os.makedirs(candidate, exist_ok=True)
                 LOG.info(f"{uid} Using data directory: {candidate}")
                 return candidate
-            LOG.warning(f"{uid} Share volume not available: {parent}")
+            LOG.warning(f"{uid} Share volume not available: {parent} (isdir=False)")
+    else:
+        LOG.warning("%s shares list is empty — check config file parsing", uid)
 
     LOG.warning(f"{uid} No shared volumes available, falling back to /tmp")
     return tempfile.mkdtemp(prefix="mars_stream_")
@@ -80,6 +86,11 @@ from .config import (
     SHARES as _cfg_shares,
 )
 from .server import tidy  # noqa: E402
+
+LOG.info(
+    "Config loaded: shared_root=%s shares=%s cache_folder=%s",
+    _cfg_shared_root, _cfg_shares, _cfg_cache_folder,
+)
 
 
 def run_mars(*, mars_executable, request, uid, logdir, environ, datadir):
