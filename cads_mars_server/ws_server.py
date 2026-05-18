@@ -23,6 +23,8 @@ from cads_mars_server.server import tidy
 log = logging.getLogger("ws-mars")
 log.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
 
+log.info("Config loaded: shared_root=%s", SHARED_ROOT)
+
 # Track active connections
 active_connections = 0
 active_connections_lock = threading.Lock()

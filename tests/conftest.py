@@ -114,7 +114,7 @@ def pipe_server(fake_mars_path, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Stream-mode HTTP server (server_read_and_stream.py)
+# Stream-mode HTTP server (server_cache_and_stream.py)
 # ---------------------------------------------------------------------------
 
 

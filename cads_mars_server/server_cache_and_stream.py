@@ -1,13 +1,14 @@
 """
-MARS server that writes data to a file, then streams it back to the client.
+MARS server that caches data to a shared volume, then streams it back to the client.
 
 This is a third execution mode alongside:
 - server.py:    pipe mode — MARS writes to a pipe, data streamed in real time.
 - ws_server.py: shared-volume mode — MARS writes to CephFS, client reads directly.
 
-Here MARS writes to a local/generic directory.  Once the process finishes the
-server reads the file back and streams it to the client over the same chunked
-HTTP protocol that ``client.py`` (RemoteMarsClient) already speaks.
+Here MARS writes to a shared cache directory chosen from the configured share
+list.  Once the process finishes the server reads the file back and streams it
+to the client over the same chunked HTTP protocol that ``client.py``
+(RemoteMarsClient) already speaks.
 
 The protocol re-uses the ENDR / EROR / RWND markers so the existing
 ``RemoteMarsClient`` / ``RemoteMarsClientCluster`` work without changes.

@@ -5,7 +5,7 @@ import sys
 
 import click
 
-from . import client, server, server_read_and_stream
+from . import client, server, server_cache_and_stream
 
 
 # Create empty click group
@@ -222,7 +222,7 @@ def stream_server(
         f"shared_root={shared_root} shares={shares} cache_folder={cache_folder}"
     )
 
-    _server = server_read_and_stream.setup_server(
+    _server = server_cache_and_stream.setup_server(
         mars_executable, host, port, timeout, logdir,
         shared_root=shared_root,
         shares=shares,

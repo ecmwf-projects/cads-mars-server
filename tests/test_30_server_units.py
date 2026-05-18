@@ -6,7 +6,7 @@ import signal
 import pytest
 
 from cads_mars_server.server import tidy, validate_uuid
-from cads_mars_server.server_read_and_stream import (
+from cads_mars_server.server_cache_and_stream import (
     Handler as StreamHandler,
     _resolve_datadir,
     validate_uuid as stream_validate_uuid,

@@ -1,4 +1,4 @@
-"""Integration tests for the stream-mode HTTP server (server_read_and_stream.py).
+"""Integration tests for the stream-mode HTTP server (server_cache_and_stream.py).
 
 The stream server writes MARS output to a file, then reads and streams
 it back to the client using proper chunked HTTP encoding (with ENDR marker).
