@@ -121,6 +121,7 @@ def run_mars(*, mars_executable, request, uid, logdir, environ, datadir):
             assert os.write(request_pipe_w, text) == len(text)
 
         for req in requests:
+            req.setdefault("PADDING", 0)
             out("RETRIEVE,\n")
             for key, value in req.items():
                 out("{0}={1},\n".format(key, tidy(value)))
