@@ -209,9 +209,16 @@ def this_server(
     default=False,
 )
 def stream_server(
-    mars_executable, host, port, timeout, logdir,
-    shared_root, shares, cache_folder,
-    pidfile, daemonize,
+    mars_executable,
+    host,
+    port,
+    timeout,
+    logdir,
+    shared_root,
+    shares,
+    cache_folder,
+    pidfile,
+    daemonize,
 ) -> None:
     """Set up a MARS server that writes to file then streams back to the client."""
     if shares is not None:
@@ -223,7 +230,11 @@ def stream_server(
     )
 
     _server = server_cache_and_stream.setup_server(
-        mars_executable, host, port, timeout, logdir,
+        mars_executable,
+        host,
+        port,
+        timeout,
+        logdir,
         shared_root=shared_root,
         shares=shares,
         cache_folder=cache_folder,

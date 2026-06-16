@@ -116,7 +116,9 @@ _shares_file = _file_config.get("shares")
 if _shares_env is not None:
     SHARES: list[str] = [s.strip() for s in _shares_env.split(",") if s.strip()]
 elif _shares_file is not None:
-    SHARES = list(_shares_file) if isinstance(_shares_file, list) else [str(_shares_file)]
+    SHARES = (
+        list(_shares_file) if isinstance(_shares_file, list) else [str(_shares_file)]
+    )
 else:
     SHARES = []
 

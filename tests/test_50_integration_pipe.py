@@ -11,13 +11,10 @@ transfer tests use raw TCP sockets to read the actual wire bytes.
 
 import concurrent.futures
 import json
-import os
 import socket
 import uuid
 
-import pytest
 import requests as req
-
 from conftest import requires_linux
 
 pytestmark = requires_linux
@@ -57,7 +54,7 @@ def _raw_post(host, port, body_dict, timeout=30):
     response = b"".join(chunks)
     header_end = response.index(b"\r\n\r\n")
     header_block = response[:header_end].decode("latin-1")
-    body = response[header_end + 4:]
+    body = response[header_end + 4 :]
 
     lines = header_block.split("\r\n")
     status_code = int(lines[0].split(" ", 2)[1])
@@ -136,7 +133,10 @@ class TestPipeServerDataTransfer:
             uid = str(uuid.uuid4())
             status, headers, body = self._post(
                 pipe_server,
-                {"request": {"class": "od", "step": str(i)}, "environ": {"request_id": uid}},
+                {
+                    "request": {"class": "od", "step": str(i)},
+                    "environ": {"request_id": uid},
+                },
             )
             assert status == 200, f"Request {i} failed with status {status}"
             assert body.startswith(b"GRIB")
@@ -192,7 +192,10 @@ class TestPipeServerLogLifecycle:
             return _raw_post(
                 pipe_server["host"],
                 pipe_server["port"],
-                {"request": {"class": "od", "step": str(idx)}, "environ": {"request_id": uid}},
+                {
+                    "request": {"class": "od", "step": str(idx)},
+                    "environ": {"request_id": uid},
+                },
             )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:

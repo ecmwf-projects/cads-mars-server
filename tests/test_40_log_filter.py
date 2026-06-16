@@ -26,8 +26,8 @@ class TestMarsLogParser:
 
     def test_process_line_dedup(self):
         p = MarsLogParser()
-        assert p.process_line("hello") == "hello"           # repeat_count=1
-        assert p.process_line("hello") == "hello"           # repeat_count=2
+        assert p.process_line("hello") == "hello"  # repeat_count=1
+        assert p.process_line("hello") == "hello"  # repeat_count=2
         # Third call hits max_repeats=3 → suppression message
         result = p.process_line("hello")
         assert result is not None

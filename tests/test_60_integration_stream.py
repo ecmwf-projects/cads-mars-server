@@ -7,11 +7,10 @@ it back to the client using proper chunked HTTP encoding (with ENDR marker).
 import os
 import uuid
 
-import pytest
 import requests as req
+from conftest import requires_linux
 
 from cads_mars_server.client import RemoteMarsClient, RemoteMarsClientCluster
-from conftest import requires_linux
 
 pytestmark = requires_linux
 
@@ -178,7 +177,6 @@ class TestStreamServerStability:
 class TestStreamServerLogLifecycle:
     def test_delete_log_after_request(self, stream_server, tmp_path):
         uid = str(uuid.uuid4())
-        target = str(tmp_path / "out.grib")
         r = req.post(
             stream_server["url"],
             json={"request": {"class": "od"}, "environ": {"request_id": uid}},
