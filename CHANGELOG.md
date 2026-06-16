@@ -5,6 +5,28 @@ All notable changes to cads-mars-server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-16
+
+### Added
+
+- New stream-oriented server mode via `server_cache_and_stream.py`
+- New stream server command support for serving cached and streamed MARS output
+- Additional unit and integration tests for server and client components
+
+### Changed
+
+- Improved stream server configuration for shared volumes and cache folder settings
+- Updated handler wiring to use configuration-driven shared root, shares, and cache folder values
+- Added default `PADDING` handling in MARS request execution path
+- Enabled automatic splitting of streamed MARS output by date boundaries
+
+### Fixed
+
+- Standardized shared root and cache folder configuration key handling
+- Fixed missing dependency declarations needed by runtime/test workflows
+- Corrected streaming HTTP response chunking and termination behavior
+- Improved datadir resolution logging for better troubleshooting
+
 ## [0.3.0] - 2026-02-10
 
 ### Added
