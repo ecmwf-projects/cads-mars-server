@@ -9,7 +9,17 @@ qa:
 	pre-commit run --all-files
 
 unit-tests:
+	python -m pytest -vv --cov=. --cov-report=$(COV_REPORT) --doctest-glob="*.md" --doctest-glob="*.rst" -m "not requires_linux"
+
+integration-tests:
+	python -m pytest -vv --cov=. --cov-report=$(COV_REPORT) -m "requires_linux"
+
+all-tests:
 	python -m pytest -vv --cov=. --cov-report=$(COV_REPORT) --doctest-glob="*.md" --doctest-glob="*.rst"
+
+docker-test:
+	docker build -f Dockerfile.test -t $(PROJECT)-test .
+	docker run --rm $(PROJECT)-test
 
 type-check:
 	python -m mypy .

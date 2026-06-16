@@ -8,8 +8,8 @@ import time
 
 import requests
 import setproctitle
-import urllib3
-from urllib3.connectionpool import HTTPConnectionPool
+import urllib3  # type: ignore[import-untyped]
+from urllib3.connectionpool import HTTPConnectionPool  # type: ignore[import-untyped]
 
 from .tools import bytes
 

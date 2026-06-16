@@ -5,7 +5,7 @@ import sys
 
 import click
 
-from . import client, server
+from . import client, server, server_cache_and_stream
 
 
 # Create empty click group
@@ -141,6 +141,103 @@ def this_server(
         pid = os.fork()
         if pid > 0:
             # exit from second parent
+            sys.exit(0)
+
+    if pidfile:
+        with open(pidfile, "w") as f:
+            f.write(str(os.getpid()))
+
+    _server.serve_forever()
+
+
+@mars_cli.command("stream-server")
+@click.option(
+    "--mars-executable",
+    "-m",
+    help="Path to the mars executable",
+    default="/usr/local/bin/mars",
+)
+@click.option(
+    "--host",
+    "-h",
+    help="Host to listen on",
+    default="",
+)
+@click.option(
+    "--port",
+    "-p",
+    help="Port to listen on",
+    default=9002,
+)
+@click.option(
+    "--timeout",
+    "-t",
+    help="Timeout sending data to client",
+    type=int,
+    default=30,
+)
+@click.option(
+    "--logdir",
+    "-l",
+    help="Path to the log directory",
+    default=".",
+)
+@click.option(
+    "--shared-root",
+    help="Root of shared volumes (default: from config or /cache)",
+    default=None,
+)
+@click.option(
+    "--shares",
+    help="Comma-separated list of volume names under shared-root (default: from config)",
+    default=None,
+)
+@click.option(
+    "--cache-folder",
+    help="Sub-folder inside each share for MARS data (default: from config or mars_data)",
+    default=None,
+)
+@click.option(
+    "--pidfile",
+    help="PID file",
+    default=None,
+)
+@click.option(
+    "--daemonize",
+    help="Detach the server from the terminal",
+    is_flag=True,
+    default=False,
+)
+def stream_server(
+    mars_executable, host, port, timeout, logdir,
+    shared_root, shares, cache_folder,
+    pidfile, daemonize,
+) -> None:
+    """Set up a MARS server that writes to file then streams back to the client."""
+    if shares is not None:
+        shares = [s.strip() for s in shares.split(",") if s.strip()]
+
+    logger.info(
+        f"Starting Stream Server {host}:{port} logdir={logdir} "
+        f"shared_root={shared_root} shares={shares} cache_folder={cache_folder}"
+    )
+
+    _server = server_cache_and_stream.setup_server(
+        mars_executable, host, port, timeout, logdir,
+        shared_root=shared_root,
+        shares=shares,
+        cache_folder=cache_folder,
+    )
+
+    if daemonize:
+        pid = os.fork()
+        if pid > 0:
+            sys.exit(0)
+
+        os.setsid()
+
+        pid = os.fork()
+        if pid > 0:
             sys.exit(0)
 
     if pidfile:
