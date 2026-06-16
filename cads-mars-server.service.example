@@ -1,0 +1,55 @@
+# systemd service file for MARS WebSocket Server
+# Installation:
+#   1. Copy to /etc/systemd/system/cads-mars-server.service
+#   2. Copy cads-mars-server.yaml.example to /etc/cads-mars-server.yaml
+#   3. Edit /etc/cads-mars-server.yaml with your configuration
+#   4. systemctl daemon-reload
+#   5. systemctl enable cads-mars-server
+#   6. systemctl start cads-mars-server
+
+[Unit]
+Description=CADS MARS WebSocket Server
+After=network.target
+# If using shared filesystem, add dependency
+# Requires=mnt-cephfs.mount
+# After=mnt-cephfs.mount
+
+[Service]
+Type=simple
+User=mars
+Group=mars
+WorkingDirectory=/var/lib/cads-mars-server
+
+# Configuration file location (optional, defaults to /etc/cads-mars-server.yaml)
+# Environment="MARS_CONFIG_FILE=/etc/cads-mars-server.yaml"
+
+# Optional: Override specific settings via environment variables
+# These take precedence over the config file
+# Environment="MARS_USE_SHARES=true"
+# Environment="MARS_SHARES_PORT=9001"
+# Environment="MARS_SHARED_ROOT=/mnt/cephfs"
+
+# Start the WebSocket server
+ExecStart=/usr/local/bin/python3 -m cads_mars_server.ws_main
+
+# Restart on failure
+Restart=on-failure
+RestartSec=10
+
+# Resource limits
+LimitNOFILE=65536
+# LimitMEMLOCK=infinity  # If needed for performance
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+# ProtectSystem=strict  # Enable if not writing to /mnt
+# ReadWritePaths=/mnt/cephfs  # If using shared filesystem
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cads-mars-server
+
+[Install]
+WantedBy=multi-user.target

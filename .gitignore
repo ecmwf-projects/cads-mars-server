@@ -468,5 +468,9 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+create/*
 
 # End of https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks,vim,visualstudiocode,pycharm,emacs,linux,macos,windows
+
+# Hide create environment files
+create
