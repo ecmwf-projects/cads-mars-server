@@ -30,7 +30,7 @@ active_connections = 0
 active_connections_lock = threading.Lock()
 
 # Track all spawned processes for cleanup on shutdown
-active_processes = set()
+active_processes: set[subprocess.Popen[bytes]] = set()
 active_processes_lock = threading.Lock()
 
 
