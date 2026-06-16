@@ -12,10 +12,13 @@ import pytest
 IS_MACOS = platform.system() == "Darwin"
 
 # Custom markers
-requires_linux = pytest.mark.skipif(
-    IS_MACOS,
-    reason="Forking servers crash on macOS (setproctitle + CoreFoundation fork-safety)",
-)
+requires_linux = [
+    pytest.mark.requires_linux,
+    pytest.mark.skipif(
+        IS_MACOS,
+        reason="Forking servers crash on macOS (setproctitle + CoreFoundation fork-safety)",
+    ),
+]
 
 # Prevent loading production config — must be set before any cads_mars_server imports
 os.environ.setdefault("MARS_CONFIG_FILE", "/nonexistent/mars/test_config.yaml")
