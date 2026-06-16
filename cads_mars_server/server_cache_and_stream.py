@@ -48,6 +48,7 @@ def validate_uuid(uid):
 # Data-directory resolution — distribute across shared volumes
 # --------------------------------------------------------------------------- #
 
+
 def _resolve_datadir(uid, shared_root, shares, cache_folder):
     """Return a data directory for *uid*, spreading across *shares*.
 
@@ -58,7 +59,10 @@ def _resolve_datadir(uid, shared_root, shares, cache_folder):
     """
     LOG.info(
         "%s _resolve_datadir called: shared_root=%s shares=%s cache_folder=%s",
-        uid, shared_root, shares, cache_folder,
+        uid,
+        shared_root,
+        shares,
+        cache_folder,
     )
     if shares:
         idx = hash(uid) % len(shares)
@@ -81,16 +85,22 @@ def _resolve_datadir(uid, shared_root, shares, cache_folder):
 # --------------------------------------------------------------------------- #
 # Request handling — reuse the same tidying logic from server.py
 # --------------------------------------------------------------------------- #
-from .config import (
+from .config import (  # noqa: E402
     CACHE_FOLDER as _cfg_cache_folder,
+)
+from .config import (  # noqa: E402
     SHARED_ROOT as _cfg_shared_root,
+)
+from .config import (  # noqa: E402
     SHARES as _cfg_shares,
 )
 from .server import tidy  # noqa: E402
 
 LOG.info(
     "Config loaded: shared_root=%s shares=%s cache_folder=%s",
-    _cfg_shared_root, _cfg_shares, _cfg_cache_folder,
+    _cfg_shared_root,
+    _cfg_shares,
+    _cfg_cache_folder,
 )
 
 
@@ -158,6 +168,7 @@ def run_mars(*, mars_executable, request, uid, logdir, environ, datadir):
 # Timeout helper
 # --------------------------------------------------------------------------- #
 
+
 def timeout_handler(signum, frame):
     LOG.warning("Timeout triggered")
     raise TimeoutError()
@@ -199,7 +210,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         setproctitle.setproctitle(f"cads_mars_server_stream {uid}")
 
         datadir = _resolve_datadir(
-            uid, self.shared_root, self.shares, self.cache_folder,
+            uid,
+            self.shared_root,
+            self.shares,
+            self.cache_folder,
         )
 
         target_path, pid = run_mars(
@@ -225,7 +239,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             # ---- MARS succeeded — stream the file back ----
             if not os.path.exists(target_path):
-                LOG.error(f"{uid} MARS succeeded but output file missing: {target_path}")
+                LOG.error(
+                    f"{uid} MARS succeeded but output file missing: {target_path}"
+                )
                 self._send_error_response(
                     uid,
                     {"code": 500, "message": "exited", "value": 1, "error": True},
@@ -420,6 +436,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 # --------------------------------------------------------------------------- #
 # Server wiring
 # --------------------------------------------------------------------------- #
+
 
 class ReuseAddressHTTPServer(http.server.HTTPServer):
     def server_bind(self):

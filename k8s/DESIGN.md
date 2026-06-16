@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-The MARS client protocol requires the caller to **open an ephemeral TCP port** and wait for remote "movers" to push data to it.  In Kubernetes this is problematic:
+The MARS client protocol requires the caller to **open an ephemeral TCP port** and wait for remote "movers" to push data to it. In Kubernetes this is problematic:
 
 - Pods have **dynamic IPs** that movers outside the cluster may not be able to reach.
 - NetworkPolicy and CNI rules often **block inbound connections** to arbitrary pod ports.
@@ -13,8 +13,8 @@ The MARS client protocol requires the caller to **open an ephemeral TCP port** a
 `cads-mars-server` solves this by running a **persistent HTTP/WebSocket proxy** (Deployment) that:
 
 1. Listens on a known port (9000/9001).
-2. Forks + execs the real `mars` binary on behalf of the caller.
-3. Streams data back to the caller over the already-established outbound connection.
+1. Forks + execs the real `mars` binary on behalf of the caller.
+1. Streams data back to the caller over the already-established outbound connection.
 
 This works, but adds:
 
@@ -22,7 +22,7 @@ This works, but adds:
 - **Serialisation bottleneck**: every byte passes through the server process.
 - **Scaling complexity**: the server Deployment needs to be sized for aggregate throughput.
 
----
+______________________________________________________________________
 
 ## Proposed Architecture
 
@@ -56,7 +56,7 @@ Replace the centralised server with a **DaemonSet** that runs on every worker no
 | **Locality** | Always co-located on the same node — communication via `localhost` or Unix socket. |
 | **Scaling** | One daemon per node — scales with the cluster automatically. |
 
----
+______________________________________________________________________
 
 ## Data Flow
 
@@ -82,17 +82,17 @@ Worker Pod ──HTTP POST──▶ mars-daemon (localhost)──fork/exec──
 Worker Pod reads from shared PVC (same filesystem, zero copy)
 ```
 
-Only the small JSON request crosses localhost.  MARS writes directly to the worker's storage.
+Only the small JSON request crosses localhost. MARS writes directly to the worker's storage.
 
----
+______________________________________________________________________
 
 ## Shared Storage Strategy
 
-The worker pod's storage should be accessible to the daemon.  Three approaches, from simplest to most flexible:
+The worker pod's storage should be accessible to the daemon. Three approaches, from simplest to most flexible:
 
 ### Option A: hostPath projection (simplest)
 
-The daemon mounts a well-known hostPath directory (e.g. `/var/mars-data/`).  Worker pods mount the same hostPath.
+The daemon mounts a well-known hostPath directory (e.g. `/var/mars-data/`). Worker pods mount the same hostPath.
 
 ```yaml
 # Worker pod
@@ -110,8 +110,8 @@ volumes:
       type: DirectoryOrCreate
 ```
 
-**Pros**: No special permissions.  Works with any CNI.  
-**Cons**: Data is node-local — not durable.  Only suitable when the worker consumes data immediately.
+**Pros**: No special permissions. Works with any CNI.
+**Cons**: Data is node-local — not durable. Only suitable when the worker consumes data immediately.
 
 ### Option B: CephFS / shared PVC (current infra)
 
@@ -124,24 +124,25 @@ volumes:
       claimName: mars-shared
 ```
 
-**Pros**: Durable, survives pod restarts.  Already in use today.  
+**Pros**: Durable, survives pod restarts. Already in use today.
 **Cons**: Performance depends on CephFS OSD health (see `docs/CEPHFS_ARCHITECTURE.md`).
 
 ### Option C: Dynamic PVC projection (most flexible)
 
-The worker pod tells the daemon which PVC to use.  The daemon uses the **Kubernetes API** to inspect the worker pod's volume mounts and bind-mounts the same path from the host filesystem.
+The worker pod tells the daemon which PVC to use. The daemon uses the **Kubernetes API** to inspect the worker pod's volume mounts and bind-mounts the same path from the host filesystem.
 
 This requires:
+
 - `hostPID: true` (to see the worker pod's mount namespace)
 - RBAC to read Pod specs
 - `nsenter` or `mountPropagation: Bidirectional`
 
-**Pros**: No shared convention — any PVC type works (Ceph block, local SSD, NFS).  
-**Cons**: Higher privilege.  More complex implementation.
+**Pros**: No shared convention — any PVC type works (Ceph block, local SSD, NFS).
+**Cons**: Higher privilege. More complex implementation.
 
 ### Recommended: Start with Option A or B, design the API so Option C is a drop-in replacement.
 
----
+______________________________________________________________________
 
 ## Daemon API
 
@@ -149,7 +150,7 @@ A minimal HTTP API on `localhost:9090` (or Unix socket `/var/run/mars-daemon.soc
 
 ### `POST /execute`
 
-Submit a MARS request.  The daemon runs `mars` and writes output to the specified target path.
+Submit a MARS request. The daemon runs `mars` and writes output to the specified target path.
 
 ```json
 {
@@ -194,7 +195,7 @@ Clean up logs for a completed request.
 
 This API is intentionally compatible with `cads-mars-server` endpoints so clients can switch backends with a URL change.
 
----
+______________________________________________________________________
 
 ## DaemonSet Manifest (skeleton)
 
@@ -264,7 +265,7 @@ spec:
           emptyDir: {}
 ```
 
----
+______________________________________________________________________
 
 ## Worker Pod Integration
 
@@ -282,7 +283,7 @@ client = RemoteMarsClient(url="http://127.0.0.1:9090")
 result = client.execute(
     request={"class": "od", "type": "an"},
     environ={"request_id": uid},
-    target="/data/output.grib",   # Shared mount
+    target="/data/output.grib",  # Shared mount
 )
 ```
 
@@ -290,7 +291,7 @@ With `hostNetwork` the daemon is always at `127.0.0.1:9090` from any pod on the 
 
 ### Fallback
 
-If the DaemonSet is down (node drain, upgrade), the worker can fall back to the centralised `mars-server` Deployment.  `RemoteMarsClientCluster` already supports this:
+If the DaemonSet is down (node drain, upgrade), the worker can fall back to the centralised `mars-server` Deployment. `RemoteMarsClientCluster` already supports this:
 
 ```python
 cluster = RemoteMarsClientCluster(
@@ -299,33 +300,35 @@ cluster = RemoteMarsClientCluster(
 )
 ```
 
----
+______________________________________________________________________
 
 ## Open Questions
 
-1. **Concurrency**: How many parallel MARS processes per node?  Should the daemon enforce a limit (like `MAX_CONCURRENT_CONNECTIONS` in `ws_server.py`)?
+1. **Concurrency**: How many parallel MARS processes per node? Should the daemon enforce a limit (like `MAX_CONCURRENT_CONNECTIONS` in `ws_server.py`)?
 
-2. **Cleanup**: Who removes old output files?  The worker (after consuming), or the daemon (after a TTL)?
+1. **Cleanup**: Who removes old output files? The worker (after consuming), or the daemon (after a TTL)?
 
-3. **Mover reachability**: Does `hostNetwork: true` suffice, or do movers need explicit routes to the Kubernetes node subnet?  This depends on the MARS infrastructure network topology.
+1. **Mover reachability**: Does `hostNetwork: true` suffice, or do movers need explicit routes to the Kubernetes node subnet? This depends on the MARS infrastructure network topology.
 
-4. **Security**: The daemon runs with elevated privileges (`hostNetwork`, possibly `hostPID`).  RBAC and PodSecurityPolicy / PodSecurityStandard need careful scoping.
+1. **Security**: The daemon runs with elevated privileges (`hostNetwork`, possibly `hostPID`). RBAC and PodSecurityPolicy / PodSecurityStandard need careful scoping.
 
-5. **Block storage PVCs**: Ceph block (RBD) PVCs are `ReadWriteOnce` — they can't be mounted by two pods simultaneously.  For Option C (dynamic PVC projection), the daemon would need to access the mount via the host's filesystem (`/var/lib/kubelet/pods/<pod-uid>/volumes/...`) rather than mounting the PVC itself.
+1. **Block storage PVCs**: Ceph block (RBD) PVCs are `ReadWriteOnce` — they can't be mounted by two pods simultaneously. For Option C (dynamic PVC projection), the daemon would need to access the mount via the host's filesystem (`/var/lib/kubelet/pods/<pod-uid>/volumes/...`) rather than mounting the PVC itself.
 
-6. **Observability**: Should the daemon expose Prometheus metrics (request count, latency, MARS exit codes, CephFS fsync times)?
+1. **Observability**: Should the daemon expose Prometheus metrics (request count, latency, MARS exit codes, CephFS fsync times)?
 
----
+______________________________________________________________________
 
 ## Implementation Phases
 
 ### Phase 1: Proof of Concept
+
 - [ ] Minimal Python daemon reusing `server.py` / `server_read_and_stream.py` internals
 - [ ] hostPath shared volume (Option A)
 - [ ] DaemonSet manifest
 - [ ] Test with fake_mars on a local k8s cluster (kind/minikube)
 
 ### Phase 2: Production Hardening
+
 - [ ] CephFS shared PVC (Option B)
 - [ ] Concurrency limits + request queuing
 - [ ] Graceful shutdown (drain in-flight requests on SIGTERM)
@@ -333,6 +336,7 @@ cluster = RemoteMarsClientCluster(
 - [ ] Helm chart or Kustomize overlay
 
 ### Phase 3: Dynamic Volume Projection
+
 - [ ] Kubernetes API integration for pod volume inspection (Option C)
 - [ ] Mount propagation or nsenter-based access
 - [ ] RBAC manifests for pod read access

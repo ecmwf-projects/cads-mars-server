@@ -8,10 +8,13 @@ import pytest
 from cads_mars_server.server import tidy, validate_uuid
 from cads_mars_server.server_cache_and_stream import (
     Handler as StreamHandler,
+)
+from cads_mars_server.server_cache_and_stream import (
     _resolve_datadir,
+)
+from cads_mars_server.server_cache_and_stream import (
     validate_uuid as stream_validate_uuid,
 )
-
 
 # ---------------------------------------------------------------------------
 # validate_uuid

@@ -10,16 +10,13 @@ import json
 import logging
 import os
 
-import pytest
 import websockets
 from conftest import requires_linux
 
-pytestmark = requires_linux
-
-from cads_mars_server.client import Result
 from cads_mars_server.log_filter import create_default_log_handler
 from cads_mars_server.ws_client import _run_one_server, mars_via_ws_sync
 
+pytestmark = requires_linux
 
 # ---------------------------------------------------------------------------
 # Basic connectivity

@@ -108,7 +108,12 @@ def pipe_server(fake_mars_path, tmp_path):
             f"Pipe server failed to start.\nstdout: {out.decode()}\nstderr: {err.decode()}"
         )
 
-    yield {"url": f"http://127.0.0.1:{port}", "host": "127.0.0.1", "port": port, "logdir": logdir}
+    yield {
+        "url": f"http://127.0.0.1:{port}",
+        "host": "127.0.0.1",
+        "port": port,
+        "logdir": logdir,
+    }
 
     _terminate(proc)
 

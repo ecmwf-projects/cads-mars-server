@@ -103,8 +103,9 @@ class TestRemoteMarsClientSession:
 
     def test_transfer_missing_endr_raises(self, tmp_path):
         """If ENDR is never received, _transfer should raise."""
-        import pytest
         from unittest.mock import MagicMock
+
+        import pytest
 
         from cads_mars_server.client import RemoteMarsClientSession
 
@@ -125,8 +126,9 @@ class TestRemoteMarsClientSession:
 
     def test_transfer_eror_raises_client_error(self, tmp_path):
         """EROR marker followed by JSON should raise ClientError."""
-        import pytest
         from unittest.mock import MagicMock
+
+        import pytest
 
         from cads_mars_server.client import ClientError, RemoteMarsClientSession
 
@@ -139,6 +141,7 @@ class TestRemoteMarsClientSession:
         )
 
         import json
+
         error_msg = json.dumps({"exited": 1}).encode()
         chunks = [b"EROR", error_msg]
         mock_response = MagicMock()
