@@ -36,15 +36,11 @@ class Result:
         self,
         error: Optional[Exception] = None,
         message: Optional[str] = None,
-        stderr: Optional[str] = None,
-        stdout: Optional[str] = None,
         retry_same_host: bool = False,
         retry_next_host: bool = False,
     ) -> None:
         self.error = error
         self.message = message
-        self.stderr = stderr
-        self.stdout = stdout
         self.retry_same_host = retry_same_host
         self.retry_next_host = retry_next_host
 
