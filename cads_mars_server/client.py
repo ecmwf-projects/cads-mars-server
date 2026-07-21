@@ -5,6 +5,7 @@ import os
 import random
 import socket
 import time
+from typing import Any, Iterable, Optional, Union
 
 import requests
 import setproctitle
@@ -17,7 +18,7 @@ LOG = logging.getLogger(__name__)
 
 
 class ConnectionWithKeepAlive(HTTPConnectionPool.ConnectionCls):  # type: ignore[valid-type,misc]
-    def _new_conn(self):
+    def _new_conn(self) -> Any:
         conn = super()._new_conn()
         conn.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         if hasattr(socket, "TCP_KEEPIDLE"):
@@ -33,17 +34,17 @@ HTTPConnectionPool.ConnectionCls = ConnectionWithKeepAlive
 class Result:
     def __init__(
         self,
-        error=None,
-        message=None,
-        retry_same_host=False,
-        retry_next_host=False,
-    ):
+        error: Optional[Exception] = None,
+        message: Optional[str] = None,
+        retry_same_host: bool = False,
+        retry_next_host: bool = False,
+    ) -> None:
         self.error = error
         self.message = message
         self.retry_same_host = retry_same_host
         self.retry_next_host = retry_next_host
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         message = "None" if self.message is None else self.message[:10]
         return (
             f"{self.__class__.__name__}(error={self.error!r}, retry_same_host={self.retry_same_host},"
@@ -52,12 +53,12 @@ class Result:
 
 
 class ClientError(Exception):
-    def __init__(self, message):
+    def __init__(self, message: dict[str, Any]) -> None:
         self.message = message
         self.retry_same_host = message.get("retry_same_host", False)
         self.retry_next_host = message.get("retry_next_host", False)
 
-    def __str__(self):
+    def __str__(self) -> str:
         if "exited" in self.message:
             return f"MARS client error exited with exit code {self.message['exited']}"
         if "killed" in self.message:
@@ -69,15 +70,15 @@ class RemoteMarsClientSession:
     def __init__(
         self,
         *,
-        url,
-        request,
-        environ,
-        target,
-        open_mode="wb",
-        position=0,
-        timeout=60,
-        log=LOG,
-    ):
+        url: str,
+        request: dict[str, Any],
+        environ: dict[str, Any],
+        target: str,
+        open_mode: str = "wb",
+        position: int = 0,
+        timeout: int = 60,
+        log: logging.Logger = LOG,
+    ) -> None:
         self.url = url
         self.request = request
         self.environ = environ
@@ -89,7 +90,7 @@ class RemoteMarsClientSession:
         self.open_mode = open_mode
         self.position = position
 
-    def _transfer(self, r):
+    def _transfer(self, r: requests.Response) -> None:
         start = time.time()
         total = 0
         with open(self.target, self.open_mode) as f:
@@ -118,7 +119,7 @@ class RemoteMarsClientSession:
                         self.endr_recieved = True
                         continue
 
-                    raise ValueError(f"Unknown message {chunk}")
+                    raise ValueError(f"Unknown message {chunk!r}")
 
                 f.write(chunk)
 
@@ -130,10 +131,10 @@ class RemoteMarsClientSession:
             f"Transfered {bytes(total)} in {elapsed:.1f}s, {bytes(total / elapsed)}"
         )
 
-    def execute(self):
+    def execute(self) -> Result:
         self.log.info(f"Calling {self.url} {self.request} {self.environ}")
 
-        error = None
+        error: Optional[Exception] = None
 
         try:
             requests.head(self.url, timeout=self.timeout)
@@ -176,10 +177,10 @@ class RemoteMarsClientSession:
                 self.log.error(f"MARS client kill by signal {signal}")
 
             if "X-MARS-RETRY-SAME-HOST" in r.headers:
-                retry_same_host = int(r.headers["X-MARS-RETRY-SAME-HOST"])
+                retry_same_host = bool(int(r.headers["X-MARS-RETRY-SAME-HOST"]))
 
             if "X-MARS-RETRY-NEXT-HOST" in r.headers:
-                retry_next_host = int(r.headers["X-MARS-RETRY-NEXT-HOST"])
+                retry_next_host = bool(int(r.headers["X-MARS-RETRY-NEXT-HOST"]))
 
             return Result(
                 error=error,
@@ -230,7 +231,7 @@ class RemoteMarsClientSession:
 
         return Result(error=error, message=logfile or str(error))
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             if self.uid is not None:
                 requests.delete(self.url + "/" + self.uid)
@@ -242,14 +243,14 @@ class RemoteMarsClient:
     def __init__(
         self,
         *,
-        url,
-        open_mode="wb",
-        position=0,
-        retries=3,
-        delay=10,
-        timeout=60,
-        log=LOG,
-    ):
+        url: str,
+        open_mode: str = "wb",
+        position: int = 0,
+        retries: int = 3,
+        delay: int = 10,
+        timeout: int = 60,
+        log: logging.Logger = LOG,
+    ) -> None:
         self.url = url
         self.retries = retries
         self.delay = delay
@@ -258,7 +259,9 @@ class RemoteMarsClient:
         self.open_mode = open_mode
         self.position = position
 
-    def execute(self, request, environ, target):
+    def execute(
+        self, request: dict[str, Any], environ: dict[str, Any], target: str
+    ) -> Result:
         session = RemoteMarsClientSession(
             url=self.url,
             request=request,
@@ -287,21 +290,33 @@ class RemoteMarsClient:
 
 
 class RemoteMarsClientCluster:
-    def __init__(self, urls, retries=3, delay=10, timeout=60, log=LOG):
+    def __init__(
+        self,
+        urls: list[str],
+        retries: int = 3,
+        delay: int = 10,
+        timeout: int = 60,
+        log: logging.Logger = LOG,
+    ) -> None:
         self.urls = urls
         self.retries = retries
         self.delay = delay
         self.timeout = timeout
         self.log = log
 
-    def execute(self, request, environ, target):
+    def execute(
+        self,
+        request: Union[dict[str, Any], Iterable[dict[str, Any]]],
+        environ: dict[str, Any],
+        target: str,
+    ) -> Result:
         if isinstance(request, dict):
             return self._execute(request, environ, target, "wb", 0)
 
-        req = {}
+        req: dict[str, Any] = {}
         open_mode = "wb"
         position = 0
-        messages = []
+        messages: list[str] = []
 
         for r in request:
             req.update(r)
@@ -321,7 +336,14 @@ class RemoteMarsClientCluster:
         result.message = "\n".join(messages)
         return result
 
-    def _execute(self, request, environ, target, open_mode, position):
+    def _execute(
+        self,
+        request: dict[str, Any],
+        environ: dict[str, Any],
+        target: str,
+        open_mode: str,
+        position: int,
+    ) -> Result:
         random.shuffle(self.urls)
         saved = setproctitle.getproctitle()
         # request_id = environ.get("request_id", "unknown")
