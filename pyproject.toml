@@ -45,6 +45,8 @@ ws-mars-server = "cads_mars_server.ws_main:main"
 branch = true
 
 [tool.mypy]
+exclude = '(^build/)'
+ignore_missing_imports = true
 strict = false
 
 [tool.pytest.ini_options]
