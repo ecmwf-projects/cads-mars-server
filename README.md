@@ -1,20 +1,23 @@
 # cads-mars-server
 
-A proxy MARS server and client designed for CADS with two operational modes:
+A proxy MARS server and client designed for CADS with three server flavors and two client modes:
 
-1. **Pipe Mode** (default): Traditional synchronous client using MARS stdin/stdout pipes
-1. **Shares Mode**: Asynchronous WebSocket-based client with shared filesystem access
+1. **Pipe server**: Traditional synchronous HTTP server using MARS stdin/stdout pipes
+1. **Stream server**: HTTP server that writes to a shared cache volume and streams the result back
+1. **WebSocket server**: Asynchronous server with shared filesystem access
+1. **Pipe client** (default): Traditional synchronous client using MARS stdin/stdout pipes
+1. **Shares client**: Asynchronous WebSocket-based client with shared filesystem access
 
 ## Features
 
-### Pipe Mode (Default)
+### Pipe Client (Default)
 
 - Direct MARS process execution via stdin/stdout
 - Synchronous request handling
 - No additional server infrastructure required
 - Backward compatible with all existing deployments
 
-### Shares Mode (WebSocket)
+### Shares Client (WebSocket)
 
 - Asynchronous job processing with server-side execution
 - Real-time log streaming from MARS processes
@@ -102,6 +105,49 @@ result = execute_mars(
     target_dir="/shared/filesystem/path",  # Must be accessible by servers
 )
 ```
+
+## CLI
+
+The package exposes two console entry points:
+
+- `cads-mars-server` for the HTTP server and client commands
+- `ws-mars-server` for the WebSocket server
+
+Use `cads-mars-server --help` to see the available subcommands:
+
+- `cads-mars-server client` runs a request from a JSON file
+- `cads-mars-server server` starts the classic pipe-based HTTP server
+- `cads-mars-server stream-server` starts the cache-and-stream HTTP server
+
+### Starting Each Server Type
+
+#### Pipe Server
+
+```bash
+cads-mars-server server \
+  --host 0.0.0.0 \
+  --port 9000 \
+  --logdir /var/log/cads-mars
+```
+
+#### Stream Server
+
+```bash
+cads-mars-server stream-server \
+  --host 0.0.0.0 \
+  --port 9002 \
+  --shared-root /cache \
+  --shares share-a,share-b \
+  --cache-folder mars_data
+```
+
+#### WebSocket Server
+
+```bash
+ws-mars-server --host 0.0.0.0 --port 9001
+```
+
+For systemd deployments, the same commands can be used in `ExecStart`.
 
 ## Configuration
 
