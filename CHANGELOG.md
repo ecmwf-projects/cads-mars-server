@@ -5,6 +5,17 @@ All notable changes to cads-mars-server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-07-28
+
+### Fixed
+
+- Config module now reads `shares` key case-insensitively (accepts both `shares:` and `SHARES:` in the YAML config file)
+
+### Changed
+
+- Added type annotations to `client.py` for improved static analysis
+- Updated Python version classifiers in `setup.cfg` / `pyproject.toml`
+
 ## [0.4.0] - 2026-06-16
 
 ### Added

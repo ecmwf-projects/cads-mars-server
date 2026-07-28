@@ -112,7 +112,7 @@ SHARED_ROOT = _get_config("MARS_SHARED_ROOT", "shared_root", "/cache", Path)
 # Each volume is a subdirectory of SHARED_ROOT.  Requests are distributed
 # across available volumes to avoid hot-spotting a single mount.
 _shares_env = os.getenv("MARS_SHARES")
-_shares_file = _file_config.get("shares")
+_shares_file = _file_config.get("shares") or _file_config.get("SHARES")
 if _shares_env is not None:
     SHARES: list[str] = [s.strip() for s in _shares_env.split(",") if s.strip()]
 elif _shares_file is not None:
