@@ -1,0 +1,4 @@
+# Intentionally empty configuration used by the test suite.
+# Tests set MARS_CONFIG_FILE to this file so that the production
+# /etc/cads-mars-server.yaml is never picked up, while still satisfying
+# the rule that an explicitly set MARS_CONFIG_FILE must exist.

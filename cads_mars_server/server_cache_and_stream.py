@@ -486,6 +486,22 @@ def setup_server(
     if cache_folder is None:
         cache_folder = _cfg_cache_folder
 
+    if not shares:
+        from .config import CONFIG_FILE, CONFIG_FILE_EXPLICIT, ConfigError
+
+        if CONFIG_FILE_EXPLICIT:
+            raise ConfigError(
+                "Stream server refusing to start: no shares configured "
+                f"(MARS_CONFIG_FILE={CONFIG_FILE}). Without shares every "
+                "request would fall back to local /tmp instead of the "
+                "shared filesystem. Configure 'shares:' in the config file, "
+                "set MARS_SHARES, or pass --shares."
+            )
+        LOG.warning(
+            "Stream server starting with an empty shares list — "
+            "requests will fall back to /tmp"
+        )
+
     os.makedirs(logdir, exist_ok=True)
 
     LOG.info(

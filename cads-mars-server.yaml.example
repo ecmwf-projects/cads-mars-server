@@ -1,6 +1,11 @@
 # MARS Server Configuration File
 # Default location: /etc/cads-mars-server.yaml
 # Override with: MARS_CONFIG_FILE=/path/to/config.yaml
+#
+# NOTE: when MARS_CONFIG_FILE is set explicitly, the file MUST exist and be
+# valid YAML — the server refuses to start otherwise (fail-fast for services).
+# Keys are case-insensitive; the legacy key CACHE_ROOT is accepted as an
+# alias for shared_root.
 
 # Note: Environment variables take precedence over this file
 # For example, MARS_PIPE_PORT=8000 will override pipe_port below
@@ -31,8 +36,8 @@ shared_root: /cache
 #   - share02
 #   - share03
 
-# Sub-folder inside each share used for MARS output data
-# cache_folder: mars_data
+# Sub-folder inside each share used for MARS output data (default: mars)
+# cache_folder: mars
 
 # ============================================================================
 # WebSocket Configuration
