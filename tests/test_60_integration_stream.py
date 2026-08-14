@@ -65,8 +65,11 @@ class TestStreamServerDataTransfer:
         assert data.startswith(b"GRIB")
 
     def test_mars_log_returned_and_cleaned_up(self, stream_server, tmp_path):
-        """After the transfer the client GETs the MARS log (Result.message)
-        and DELETEs it — the server must not remove the log file itself."""
+        """The server must not remove the MARS log file itself.
+
+        After the transfer the client GETs the log (it becomes
+        Result.message) and then DELETEs it.
+        """
         target = str(tmp_path / "output.grib")
         uid = str(uuid.uuid4())
         client = RemoteMarsClient(url=stream_server["url"], timeout=30)

@@ -64,9 +64,7 @@ class TestYamlLoading:
         assert "CACHE_FOLDER marsx" in result.stdout
 
     def test_port_from_file(self, tmp_path):
-        result = _run(
-            SNIPPET_PRINT, config_text="pipe_port: 9100\n", tmp_path=tmp_path
-        )
+        result = _run(SNIPPET_PRINT, config_text="pipe_port: 9100\n", tmp_path=tmp_path)
         assert result.returncode == 0, result.stderr
         assert "PIPE_PORT 9100" in result.stdout
 
@@ -110,9 +108,7 @@ class TestBooleans:
 
 class TestExplicitConfigStrictness:
     def test_explicit_missing_file_fails(self, tmp_path):
-        result = _run(
-            SNIPPET_PRINT, config_file=str(tmp_path / "does-not-exist.yaml")
-        )
+        result = _run(SNIPPET_PRINT, config_file=str(tmp_path / "does-not-exist.yaml"))
         assert result.returncode != 0
         assert "ConfigError" in result.stderr
         assert "not found" in result.stderr
