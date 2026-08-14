@@ -5,6 +5,24 @@ All notable changes to cads-mars-server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **AREA-scaled retrieve-size limit.** All three server flavors (pipe,
+  stream, websocket) now export `MARS_MAX_RETRIEVE_SIZE` to the mars
+  executable, scaled by the AREA fraction of the request
+  (`selected area / whole globe`). The mars size check applies to the
+  post-AREA output, so a small-area request could previously make the
+  backend move terabytes of full fields to produce a few megabytes; scaling
+  the ceiling keeps the underlying full-field volume bounded. New config
+  keys: `max_retrieve_size` (base ceiling, default 150 GiB — the value the
+  cds-ansible wrapper hard-coded) and `max_retrieve_size_floor` (lower
+  bound for degenerate zero-area selections, default 1 GiB), both
+  overridable via `MARS_MAX_RETRIEVE_SIZE` / `MARS_MAX_RETRIEVE_SIZE_FLOOR`.
+  The cds-ansible wrapper needs no change: it only defaults the variable
+  (`${MARS_MAX_RETRIEVE_SIZE:=...}`), so the server-exported value wins.
+
 ## [0.4.2] - 2026-08-14
 
 ### Fixed

@@ -40,6 +40,21 @@ shared_root: /cache
 # cache_folder: mars
 
 # ============================================================================
+# MARS Retrieval Limits
+# ============================================================================
+
+# Base ceiling for MARS_MAX_RETRIEVE_SIZE exported to the mars executable
+# (bytes, default 150 GiB). Per request, the exported value is scaled down
+# by the AREA fraction (selected area / whole globe): the mars size check
+# applies to the post-AREA output, so without scaling a small-area request
+# can make the backend move terabytes of full fields for a few megabytes.
+# max_retrieve_size: 161061273600
+
+# Lower bound for the AREA-scaled value (bytes, default 1 GiB), so that
+# degenerate selections (points/lines have zero area) keep a workable limit.
+# max_retrieve_size_floor: 1073741824
+
+# ============================================================================
 # WebSocket Configuration
 # ============================================================================
 

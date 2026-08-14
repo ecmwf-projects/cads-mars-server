@@ -189,6 +189,25 @@ else:
 CACHE_FOLDER = _get_config("MARS_CACHE_FOLDER", "cache_folder", "mars", str)
 
 # ============================================================================
+# MARS Retrieval Limits
+# ============================================================================
+
+# Base ceiling for MARS_MAX_RETRIEVE_SIZE exported to the mars executable
+# (default 150 GiB, same value the cds-ansible wrapper used to hard-code).
+# The value actually exported per request is scaled down by the AREA fraction
+# of the request — see tools.scaled_max_retrieve_size().
+MAX_RETRIEVE_SIZE = _get_config(
+    "MARS_MAX_RETRIEVE_SIZE", "max_retrieve_size", 161061273600, int
+)
+
+# Lower bound for the AREA-scaled limit (default 1 GiB), so degenerate
+# selections (a point or a line have zero area) still get a workable
+# allowance instead of a zero limit that would reject every retrieval.
+MAX_RETRIEVE_SIZE_FLOOR = _get_config(
+    "MARS_MAX_RETRIEVE_SIZE_FLOOR", "max_retrieve_size_floor", 1073741824, int
+)
+
+# ============================================================================
 # WebSocket Configuration
 # ============================================================================
 

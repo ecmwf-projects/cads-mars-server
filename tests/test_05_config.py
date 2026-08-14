@@ -136,6 +136,42 @@ class TestExplicitConfigStrictness:
         assert result.returncode == 0, result.stderr
 
 
+class TestRetrieveSizeConfig:
+    SNIPPET = textwrap.dedent(
+        """
+        from cads_mars_server import config
+        print("MAX_RETRIEVE_SIZE", config.MAX_RETRIEVE_SIZE)
+        print("MAX_RETRIEVE_SIZE_FLOOR", config.MAX_RETRIEVE_SIZE_FLOOR)
+        """
+    )
+
+    def test_defaults(self, tmp_path):
+        result = _run(self.SNIPPET, config_text="", tmp_path=tmp_path)
+        assert result.returncode == 0, result.stderr
+        assert "MAX_RETRIEVE_SIZE 161061273600" in result.stdout
+        assert "MAX_RETRIEVE_SIZE_FLOOR 1073741824" in result.stdout
+
+    def test_from_file(self, tmp_path):
+        result = _run(
+            self.SNIPPET,
+            config_text="max_retrieve_size: 1000\nmax_retrieve_size_floor: 10\n",
+            tmp_path=tmp_path,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "MAX_RETRIEVE_SIZE 1000" in result.stdout
+        assert "MAX_RETRIEVE_SIZE_FLOOR 10" in result.stdout
+
+    def test_env_overrides_file(self, tmp_path):
+        result = _run(
+            self.SNIPPET,
+            config_text="max_retrieve_size: 1000\n",
+            tmp_path=tmp_path,
+            extra_env={"MARS_MAX_RETRIEVE_SIZE": "2000"},
+        )
+        assert result.returncode == 0, result.stderr
+        assert "MAX_RETRIEVE_SIZE 2000" in result.stdout
+
+
 class TestStreamServerFailFast:
     SNIPPET_SETUP = textwrap.dedent(
         """

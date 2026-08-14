@@ -19,6 +19,7 @@ from cads_mars_server.config import (
     SHARED_ROOT,
 )
 from cads_mars_server.server import tidy
+from cads_mars_server.tools import area_fraction, scaled_max_retrieve_size
 
 log = logging.getLogger("ws-mars")
 log.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
@@ -401,6 +402,16 @@ async def handle_client(websocket):
                         env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
 
                 env.update({"MARS_AUTO_SPLIT_BY_DATES": "1"})
+
+                # Scale the retrieve-size ceiling by the AREA fraction
+                max_retrieve_size = scaled_max_retrieve_size(requests)
+                env["MARS_MAX_RETRIEVE_SIZE"] = str(max_retrieve_size)
+                log.info(
+                    "%s MARS_MAX_RETRIEVE_SIZE=%d (area fraction %.6f)",
+                    job_id,
+                    max_retrieve_size,
+                    area_fraction(requests),
+                )
 
                 # Launch mars binary
                 proc = subprocess.Popen(

@@ -28,7 +28,7 @@ import uuid
 
 import setproctitle
 
-from .tools import bytes
+from .tools import area_fraction, bytes, scaled_max_retrieve_size
 
 logging.basicConfig(
     level=logging.INFO,
@@ -111,6 +111,16 @@ def run_mars(*, mars_executable, request, uid, logdir, environ, datadir):
     """
     target_path = os.path.join(datadir, f"{uid}.grib")
 
+    # Scale the retrieve-size ceiling by the AREA fraction of the request
+    # (computed before the fork so both branches see the same value).
+    max_retrieve_size = scaled_max_retrieve_size(request)
+    LOG.info(
+        "%s MARS_MAX_RETRIEVE_SIZE=%d (area fraction %.6f)",
+        uid,
+        max_retrieve_size,
+        area_fraction(request),
+    )
+
     request_pipe_r, request_pipe_w = os.pipe()
     os.set_inheritable(request_pipe_r, True)
     os.set_inheritable(request_pipe_w, True)
@@ -160,6 +170,7 @@ def run_mars(*, mars_executable, request, uid, logdir, environ, datadir):
             env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
     env.setdefault("MARS_ENVIRON_REQUEST_ID", uid)
     env.update({"MARS_AUTO_SPLIT_BY_DATES": "1"})
+    env["MARS_MAX_RETRIEVE_SIZE"] = str(max_retrieve_size)
 
     os.execlpe(mars_executable, mars_executable, env)
 

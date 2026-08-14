@@ -12,7 +12,7 @@ import uuid
 
 import setproctitle
 
-from .tools import bytes
+from .tools import area_fraction, bytes, scaled_max_retrieve_size
 
 logging.basicConfig(
     level=logging.INFO,
@@ -67,6 +67,10 @@ def tidy(data):
 
 
 def mars(*, mars_executable, request, uid, logdir, environ):
+    # Scale the retrieve-size ceiling by the AREA fraction of the request
+    # (computed before the fork so both branches see the same value).
+    max_retrieve_size = scaled_max_retrieve_size(request)
+
     data_pipe_r, data_pipe_w = os.pipe()
     request_pipe_r, request_pipe_w = os.pipe()
 
@@ -78,6 +82,13 @@ def mars(*, mars_executable, request, uid, logdir, environ):
     pid = os.fork()
 
     if pid:
+        LOG.info(
+            "%s MARS_MAX_RETRIEVE_SIZE=%d (area fraction %.6f)",
+            uid,
+            max_retrieve_size,
+            area_fraction(request),
+        )
+
         if isinstance(request, dict):
             requests = [request]
         else:
@@ -122,6 +133,7 @@ def mars(*, mars_executable, request, uid, logdir, environ):
             env[f"MARS_ENVIRON_{k.upper()}"] = str(v)
 
     env.setdefault("MARS_ENVIRON_REQUEST_ID", uid)
+    env["MARS_MAX_RETRIEVE_SIZE"] = str(max_retrieve_size)
 
     os.execlpe(mars_executable, mars_executable, env)
 

@@ -85,6 +85,41 @@ class TestStreamServerDataTransfer:
         logfile = os.path.join(stream_server["logdir"], f"{uid}.log")
         assert not os.path.exists(logfile)
 
+    def test_max_retrieve_size_scaled_by_area(self, stream_server, tmp_path):
+        """AREA requests get a reduced MARS_MAX_RETRIEVE_SIZE.
+
+        The exported value is scaled by the area fraction, with a 1 GiB
+        floor for very small selections.
+        """
+        client = RemoteMarsClient(url=stream_server["url"], timeout=30)
+
+        # Without AREA: the full default ceiling (150 GiB)
+        result = client.execute(
+            request={"class": "od"},
+            environ={"request_id": str(uuid.uuid4())},
+            target=str(tmp_path / "full.grib"),
+        )
+        assert result.error is None
+        assert "MARS_MAX_RETRIEVE_SIZE=161061273600" in result.message
+
+        # 10°×12° AREA: scaled size is below the 1 GiB floor → floored
+        result = client.execute(
+            request={"class": "od", "area": "60/-10/50/2"},
+            environ={"request_id": str(uuid.uuid4())},
+            target=str(tmp_path / "small.grib"),
+        )
+        assert result.error is None
+        assert "MARS_MAX_RETRIEVE_SIZE=1073741824" in result.message
+
+        # Half the globe: half the ceiling
+        result = client.execute(
+            request={"class": "od", "area": [90, -180, 0, 180]},
+            environ={"request_id": str(uuid.uuid4())},
+            target=str(tmp_path / "half.grib"),
+        )
+        assert result.error is None
+        assert "MARS_MAX_RETRIEVE_SIZE=80530636800" in result.message
+
     def test_cluster_single_server(self, stream_server, tmp_path):
         target = str(tmp_path / "output.grib")
         cluster = RemoteMarsClientCluster(

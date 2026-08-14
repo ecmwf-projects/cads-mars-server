@@ -27,6 +27,11 @@ def main():
         request = sys.stdin.read()
 
     print(f"fake_mars: received request ({len(request)} bytes)", flush=True)
+    print(
+        "fake_mars: MARS_MAX_RETRIEVE_SIZE="
+        f"{os.environ.get('MARS_MAX_RETRIEVE_SIZE', 'unset')}",
+        flush=True,
+    )
 
     # Optional delay
     delay = float(os.environ.get("MARS_TEST_DELAY", "0"))
