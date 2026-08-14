@@ -225,8 +225,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             datadir=datadir,
         )
 
-        logfile = os.path.join(self.logdir, f"{uid}.log")
-
         try:
             # ---- wait for MARS to finish ----
             _, status = os.waitpid(pid, 0)
@@ -250,8 +248,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             self._stream_file(uid, target_path)
         finally:
+            # Only remove the data file: its content has been streamed (or an
+            # error response sent). The MARS log file must survive this request
+            # — after the transfer the client fetches it with GET /<uid> (it
+            # becomes Result.message) and then removes it with DELETE /<uid>,
+            # exactly like the pipe server (server.py) protocol.
             self._cleanup_data(target_path)
-            self._cleanup_data(logfile)
 
     # ------------------------------------------------------------------ GET
     def do_GET(self):

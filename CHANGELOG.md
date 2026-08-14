@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Stream server no longer deletes the MARS log before the client can fetch
+  it.** `do_POST` removed the log file in its `finally` block, so the client's
+  follow-up `GET /<uid>` always returned 404 and `Result.message` degraded to
+  the string `"None"` instead of the MARS log. The log now survives until the
+  client's `DELETE /<uid>`, matching the pipe server protocol.
 - **PyYAML is now a declared runtime dependency.** It was listed only in the
   (ignored) `setup.cfg` `install_requires`, so `pip install` never pulled it
   in and `/etc/cads-mars-server.yaml` was silently ignored on every
