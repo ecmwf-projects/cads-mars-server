@@ -6,6 +6,7 @@ import sys
 import click
 
 from . import client, server, server_cache_and_stream
+from .config import DEFAULT_PIPE_PORT
 
 
 # Create empty click group
@@ -88,13 +89,13 @@ def this_client(request_file, target, uid, server_list) -> None:
 @click.option(
     "--port",
     "-p",
-    help="Port to listen on",
-    default=9000,
+    help="Port to listen on (default: pipe_port from config, or 9000)",
+    default=DEFAULT_PIPE_PORT,
 )
 @click.option(
     "--timeout",
     "-t",
-    help="Timeout sendind data to client",
+    help="Timeout sending data to client",
     type=int,
     default=30,
 )
@@ -194,7 +195,7 @@ def this_server(
 )
 @click.option(
     "--cache-folder",
-    help="Sub-folder inside each share for MARS data (default: from config or mars_data)",
+    help="Sub-folder inside each share for MARS data (default: from config or mars)",
     default=None,
 )
 @click.option(

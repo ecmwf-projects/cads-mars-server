@@ -5,8 +5,12 @@ import asyncio
 import os
 import sys
 
-# Prevent production config before any package imports
-os.environ.setdefault("MARS_CONFIG_FILE", "/nonexistent/mars/test_config.yaml")
+# Prevent production config before any package imports (an explicitly set
+# MARS_CONFIG_FILE must exist, so fall back to the tests' empty config)
+os.environ.setdefault(
+    "MARS_CONFIG_FILE",
+    os.path.join(os.path.dirname(__file__), "empty_config.yaml"),
+)
 
 import websockets  # noqa: E402
 

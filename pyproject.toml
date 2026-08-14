@@ -15,6 +15,7 @@ classifiers = [
   "Topic :: Scientific/Engineering"
 ]
 dependencies = [
+  "PyYAML",
   "click",
   "requests",
   "setproctitle",

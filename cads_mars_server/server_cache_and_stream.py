@@ -225,8 +225,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             datadir=datadir,
         )
 
-        logfile = os.path.join(self.logdir, f"{uid}.log")
-
         try:
             # ---- wait for MARS to finish ----
             _, status = os.waitpid(pid, 0)
@@ -250,8 +248,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             self._stream_file(uid, target_path)
         finally:
+            # Only remove the data file: its content has been streamed (or an
+            # error response sent). The MARS log file must survive this request
+            # — after the transfer the client fetches it with GET /<uid> (it
+            # becomes Result.message) and then removes it with DELETE /<uid>,
+            # exactly like the pipe server (server.py) protocol.
             self._cleanup_data(target_path)
-            self._cleanup_data(logfile)
 
     # ------------------------------------------------------------------ GET
     def do_GET(self):
@@ -485,6 +487,22 @@ def setup_server(
         shares = _cfg_shares
     if cache_folder is None:
         cache_folder = _cfg_cache_folder
+
+    if not shares:
+        from .config import CONFIG_FILE, CONFIG_FILE_EXPLICIT, ConfigError
+
+        if CONFIG_FILE_EXPLICIT:
+            raise ConfigError(
+                "Stream server refusing to start: no shares configured "
+                f"(MARS_CONFIG_FILE={CONFIG_FILE}). Without shares every "
+                "request would fall back to local /tmp instead of the "
+                "shared filesystem. Configure 'shares:' in the config file, "
+                "set MARS_SHARES, or pass --shares."
+            )
+        LOG.warning(
+            "Stream server starting with an empty shares list — "
+            "requests will fall back to /tmp"
+        )
 
     os.makedirs(logdir, exist_ok=True)
 

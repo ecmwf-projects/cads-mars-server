@@ -8,9 +8,16 @@ Configuration precedence (highest to lowest):
 
 For systemd services, use /etc/cads-mars-server.yaml as primary configuration.
 For Kubernetes pods, use environment variables.
+
+Strictness: when MARS_CONFIG_FILE is set explicitly, the file MUST exist and
+be readable (PyYAML installed, valid YAML) — any failure raises ConfigError
+so services fail fast instead of silently running with built-in defaults.
+When the default path (/etc/cads-mars-server.yaml) is used implicitly, a
+missing file is fine, but an unreadable/unparseable one emits a warning.
 """
 
 import os
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -18,34 +25,87 @@ from typing import Any, Optional
 DEFAULT_CONFIG_FILE = "/etc/cads-mars-server.yaml"
 CONFIG_FILE = os.getenv("MARS_CONFIG_FILE", DEFAULT_CONFIG_FILE)
 
+# True when the config file location was set explicitly via MARS_CONFIG_FILE.
+# Explicit configuration is mandatory: failures to load it are fatal.
+CONFIG_FILE_EXPLICIT = os.getenv("MARS_CONFIG_FILE") is not None
+
+
+class ConfigError(RuntimeError):
+    """Raised when an explicitly requested configuration cannot be loaded."""
+
+
+# File keys are normalized to lowercase; these aliases map legacy key names
+# (written by older cds-ansible templates / shared with ds-cache tooling)
+# onto the canonical names used here.
+_KEY_ALIASES = {
+    "cache_root": "shared_root",
+}
+
+_TRUTHY = ("true", "1", "yes", "on")
+
+
+def _fail_or_warn(message: str) -> None:
+    """Raise if the config file was requested explicitly, warn otherwise."""
+    if CONFIG_FILE_EXPLICIT:
+        raise ConfigError(message)
+    warnings.warn(message)
+
 
 def _load_yaml_config() -> dict[str, Any]:
     """
-    Load configuration from YAML file if it exists.
+    Load configuration from YAML file.
+
+    Keys are normalized to lowercase and legacy aliases (e.g. CACHE_ROOT)
+    are mapped to their canonical names (shared_root).
 
     Returns
     -------
-        Dictionary with configuration values, or empty dict if file doesn't exist.
+        Dictionary with configuration values. Empty dict if the default
+        config file doesn't exist or cannot be read (with a warning).
+
+    Raises
+    ------
+        ConfigError
+            If MARS_CONFIG_FILE was set explicitly and the file is missing,
+            PyYAML is not installed, or the file cannot be parsed.
     """
     config_path = Path(CONFIG_FILE)
 
     if not config_path.exists():
+        if CONFIG_FILE_EXPLICIT:
+            raise ConfigError(
+                f"Configuration file not found: MARS_CONFIG_FILE={CONFIG_FILE}"
+            )
         return {}
 
     try:
         import yaml  # type: ignore[import-untyped]
-
-        with open(config_path) as f:
-            config = yaml.safe_load(f) or {}
-        return config
     except ImportError:
-        # PyYAML not installed, skip file-based config
+        _fail_or_warn(
+            f"PyYAML is not installed: configuration file {CONFIG_FILE} "
+            "cannot be read and is IGNORED. Install PyYAML (pip install pyyaml)."
+        )
         return {}
-    except Exception as e:
-        import warnings
 
-        warnings.warn(f"Failed to load config file {CONFIG_FILE}: {e}")
+    try:
+        with open(config_path) as f:
+            raw = yaml.safe_load(f) or {}
+    except Exception as e:
+        _fail_or_warn(f"Failed to load config file {CONFIG_FILE}: {e}")
         return {}
+
+    if not isinstance(raw, dict):
+        _fail_or_warn(
+            f"Config file {CONFIG_FILE} must contain a YAML mapping, "
+            f"got {type(raw).__name__}: content IGNORED."
+        )
+        return {}
+
+    normalized: dict[str, Any] = {}
+    for key, value in raw.items():
+        k = str(key).lower()
+        normalized[_KEY_ALIASES.get(k, k)] = value
+    return normalized
 
 
 # Load file-based configuration
@@ -77,7 +137,7 @@ def _get_config(
     env_value = os.getenv(env_key)
     if env_value is not None:
         if cast_type is bool:
-            return env_value.lower() in ("true", "1", "yes", "on")
+            return env_value.lower() in _TRUTHY
         elif cast_type is Path:
             return Path(env_value)
         else:
@@ -89,6 +149,9 @@ def _get_config(
         if cast_type is Path:
             return Path(file_value)
         elif cast_type is bool:
+            # YAML strings like "false" must not become True
+            if isinstance(file_value, str):
+                return file_value.strip().lower() in _TRUTHY
             return bool(file_value)
         else:
             return cast_type(file_value)
@@ -112,7 +175,7 @@ SHARED_ROOT = _get_config("MARS_SHARED_ROOT", "shared_root", "/cache", Path)
 # Each volume is a subdirectory of SHARED_ROOT.  Requests are distributed
 # across available volumes to avoid hot-spotting a single mount.
 _shares_env = os.getenv("MARS_SHARES")
-_shares_file = _file_config.get("shares") or _file_config.get("SHARES")
+_shares_file = _file_config.get("shares")
 if _shares_env is not None:
     SHARES: list[str] = [s.strip() for s in _shares_env.split(",") if s.strip()]
 elif _shares_file is not None:

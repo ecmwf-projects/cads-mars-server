@@ -64,6 +64,27 @@ class TestStreamServerDataTransfer:
         assert len(data) > 0
         assert data.startswith(b"GRIB")
 
+    def test_mars_log_returned_and_cleaned_up(self, stream_server, tmp_path):
+        """The server must not remove the MARS log file itself.
+
+        After the transfer the client GETs the log (it becomes
+        Result.message) and then DELETEs it.
+        """
+        target = str(tmp_path / "output.grib")
+        uid = str(uuid.uuid4())
+        client = RemoteMarsClient(url=stream_server["url"], timeout=30)
+        result = client.execute(
+            request={"class": "od", "type": "an", "levtype": "sfc"},
+            environ={"request_id": uid},
+            target=target,
+        )
+        assert result.error is None, f"Unexpected error: {result.error}"
+        # The message is the MARS log content, not "None" or an error string
+        assert "fake_mars" in result.message
+        # The client's final DELETE removed the log from the server's logdir
+        logfile = os.path.join(stream_server["logdir"], f"{uid}.log")
+        assert not os.path.exists(logfile)
+
     def test_cluster_single_server(self, stream_server, tmp_path):
         target = str(tmp_path / "output.grib")
         cluster = RemoteMarsClientCluster(

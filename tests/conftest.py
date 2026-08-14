@@ -20,8 +20,11 @@ requires_linux = [
     ),
 ]
 
-# Prevent loading production config — must be set before any cads_mars_server imports
-os.environ.setdefault("MARS_CONFIG_FILE", "/nonexistent/mars/test_config.yaml")
+# Prevent loading production config — must be set before any cads_mars_server
+# imports.  An explicitly set MARS_CONFIG_FILE must exist (missing file is a
+# hard error since 0.4.2), so point it at an empty config shipped with tests.
+EMPTY_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "empty_config.yaml")
+os.environ.setdefault("MARS_CONFIG_FILE", EMPTY_CONFIG_PATH)
 
 FAKE_MARS_PATH = os.path.join(os.path.dirname(__file__), "fake_mars.py")
 WS_SERVER_HELPER = os.path.join(os.path.dirname(__file__), "_ws_server_helper.py")
@@ -31,7 +34,7 @@ def _server_env():
     """Environment for server subprocesses."""
     env = os.environ.copy()
     env["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
-    env["MARS_CONFIG_FILE"] = "/nonexistent/mars/test_config.yaml"
+    env["MARS_CONFIG_FILE"] = EMPTY_CONFIG_PATH
     return env
 
 
@@ -200,7 +203,7 @@ def ws_server(fake_mars_path, tmp_path):
 
     env = os.environ.copy()
     env["MARS_SHARED_ROOT"] = str(shared_root)
-    env["MARS_CONFIG_FILE"] = "/nonexistent/mars/test_config.yaml"
+    env["MARS_CONFIG_FILE"] = EMPTY_CONFIG_PATH
     env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
     # Shorter heartbeat for tests
     env["MARS_HEARTBEAT_INTERVAL"] = "5"

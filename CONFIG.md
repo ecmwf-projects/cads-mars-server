@@ -31,6 +31,17 @@ Set via environment variable:
 export MARS_CONFIG_FILE=/path/to/custom-config.yaml
 ```
 
+**Strict mode:** when `MARS_CONFIG_FILE` is set explicitly, the file **must**
+exist and be valid YAML (and PyYAML must be installed) — otherwise the process
+raises `ConfigError` at startup instead of silently running with built-in
+defaults. This is the recommended setup for systemd services. With the
+implicit default path (`/etc/cads-mars-server.yaml`), a missing file is fine
+and load problems produce warnings.
+
+**Key normalization:** file keys are case-insensitive (`SHARES:` and
+`shares:` are equivalent), and the legacy key `CACHE_ROOT` is accepted as an
+alias for `shared_root`.
+
 ### Example Configuration
 
 ```yaml

@@ -5,6 +5,42 @@ All notable changes to cads-mars-server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Stream server no longer deletes the MARS log before the client can fetch
+  it.** `do_POST` removed the log file in its `finally` block, so the client's
+  follow-up `GET /<uid>` always returned 404 and `Result.message` degraded to
+  the string `"None"` instead of the MARS log. The log now survives until the
+  client's `DELETE /<uid>`, matching the pipe server protocol.
+- **PyYAML is now a declared runtime dependency.** It was listed only in the
+  (ignored) `setup.cfg` `install_requires`, so `pip install` never pulled it
+  in and `/etc/cads-mars-server.yaml` was silently ignored on every
+  ansible-provisioned host — the server ran on built-in defaults and the
+  stream server fell back to `/tmp` instead of the shared filesystem.
+  Also added `pyyaml` to `environment.yml` (Docker image parity).
+- Config file keys are now normalized case-insensitively for **all** keys
+  (0.4.1 special-cased only `SHARES`), and the legacy key `CACHE_ROOT`
+  written by older cds-ansible templates is accepted as an alias for
+  `shared_root`.
+- YAML string booleans are cast correctly: `use_shares: "false"` no longer
+  evaluates to `True`.
+- `cads-mars-server server --port` default now honours `pipe_port` from the
+  config file instead of a hard-coded 9000.
+- Documentation drift: `cache_folder` default is `mars`, not `mars_data`.
+
+### Changed
+
+- **Fail-fast configuration.** When `MARS_CONFIG_FILE` is set explicitly, a
+  missing, unparseable, or unreadable (PyYAML absent) config file raises
+  `ConfigError` at startup instead of silently falling back to defaults.
+  With the implicit default path, problems are reported as warnings instead
+  of being swallowed.
+- The stream server refuses to start when `MARS_CONFIG_FILE` is set and the
+  resolved shares list is empty (it would silently write all MARS output to
+  local `/tmp`). Without an explicit config file a warning is logged.
+
 ## [0.4.1] - 2026-07-28
 
 ### Fixed
